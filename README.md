@@ -143,8 +143,6 @@ for i in range(y_test.shape[1]):
 for j in range(i + 1, len(axs)):
     fig.delaxes(axs[j])  # Remove unused axes to clean up the figure
 
+```
 
 ![Forecasts](docs/figures/forecasts.png)
-
-
-```
