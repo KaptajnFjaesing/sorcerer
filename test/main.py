@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Mon Sep  9 20:22:19 2024
 
@@ -10,7 +9,7 @@ import matplotlib.pyplot as plt
 import arviz as az
 
 from src.load_data import normalized_weekly_store_category_household_sales
-from src.sorcerer_model import SorcererModel
+from src.sorcerer_model2 import SorcererModel
 
 df = normalized_weekly_store_category_household_sales()
 
@@ -33,7 +32,7 @@ y_total = (df[unnormalized_column_group]-training_data[unnormalized_column_group
 # %% Define model
 
 sampler_config = {
-    "draws": 1000,
+    "draws": 1_000,
     "tune": 200,
     "chains": 1,
     "cores": 1,
@@ -90,7 +89,7 @@ axs = axs.flatten()
 # Loop through each column to plot
 for i in range(y_test.shape[1]):
     ax = axs[i]  # Get the correct subplot
-    ax.plot(x_total, y_total[y_total.columns[i]], color = 'tab:red',  label='Training Data')
+    ax.plot(x_total, y_total[y_total.columns[i]], color = 'tab:red',  label='Data')
     ax.plot(preds_out_of_sample, (model_preds["target_distribution"].mean(("chain", "draw")).T)[i], color = 'tab:blue', label='Model')
     ax.fill_between(
         preds_out_of_sample.values,
