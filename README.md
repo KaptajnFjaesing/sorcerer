@@ -52,32 +52,37 @@ y_total = (df[unnormalized_column_group]-training_data[unnormalized_column_group
 ## Define model
 
 ```python
+model_name = "SorcererModel"
+version = "v0.1"
+
 sampler_config = {
-    "draws": 1_000,
+    "draws": 2000,
     "tune": 200,
-    "chains": 1,
-    "cores": 1,
-    "target_accept": 0.95,
+    "chains": 4,
+    "cores": 1
 }
 
 model_config = {
-    "forecast_horizon": 0.5,
-    "target_standard_deviation": 0.01,
+    "test_train_split": len(training_data)/len(df),
     "number_of_individual_trend_changepoints": 20,
     "number_of_individual_fourier_components": 10,
+    "number_of_shared_fourier_components": 5,
     "period_threshold": 0.5,
-    "number_of_shared_seasonality_groups": 3,
+    "number_of_shared_seasonality_groups": 1,
     "delta_mu_prior": 0,
-    "delta_b_prior": 0.4,
+    "delta_b_prior": 0.2,
     "m_sigma_prior": 1,
     "k_sigma_prior": 1,
+    "precision_target_distribution_prior_alpha": 2,
+    "precision_target_distribution_prior_beta": 0.1,
     "relative_uncertainty_factor_prior": 1000
-
 }
 
 sorcerer = SorcererModel(
     sampler_config = sampler_config,
-    model_config = model_config
+    model_config = model_config,
+    model_name = model_name,
+    version = version
     )
 ```
 
@@ -89,14 +94,20 @@ sorcerer.fit(
     step="NUTS"
     )
 
-Sequential sampling (1 chains in 1 job)
+fname = "examples/models/sorcer_model_v01.nc"
+sorcerer.save(fname) # save model
+
+Sequential sampling (4 chains in 1 job)
 CompoundStep
->NUTS: [linear1_k, linear1_delta, linear1_m, fourier_coefficients_seasonality_individual1, season_parameter_seasonality_individual1, fourier_coefficients_seasonality_shared, season_parameter_seasonality_shared, model_probs]
->CategoricalGibbsMetropolis: [chosen_model_index]
-Sampling chain 0, 0 divergences ------------------------ 100% 0:00:00 / 0:10:08
-[?25hSampling 1 chain for 200 tune and 1_000 draw iterations (200 + 1_000 draws total) took 609 seconds.
-Chain 0 reached the maximum tree depth. Increase `max_treedepth`, increase `target_accept` or reparameterize.
-Only one chain was sampled, this makes it impossible to run some convergence checks
+>NUTS: [linear1_k, linear1_delta, linear1_m, fourier_coefficients_seasonality_individual1, season_parameter_seasonality_individual1, fourier_coefficients_seasonality_shared, season_parameter_seasonality_shared, model_probs, precision_target_distribution]
+>BinaryGibbsMetropolis: [chosen_model_index]
+Sampling chain 0, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:09:21
+Sampling chain 1, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:10:05
+Sampling chain 2, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:09:54
+Sampling chain 3, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:09:57
+Sampling 4 chains for 200 tune and 2_000 draw iterations (800 + 8_000 draws total) took 2359 seconds.
+The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
+The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details
 ```
 
 ## Produce forecasts
@@ -104,8 +115,7 @@ Only one chain was sampled, this makes it impossible to run some convergence che
 (preds_out_of_sample, model_preds) = sorcerer.sample_posterior_predictive(X_pred = x_test)
 
 Sampling: [target_distribution]
-Sampling ... ---------------------------------------- 100% 0:00:00 / 0:00:00
-[?25h
+Sampling ... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:00:02
 ```
 
 ## Plot forecasts along with test and training data
@@ -145,4 +155,4 @@ for j in range(i + 1, len(axs)):
 
 ```
 
-![Forecasts](docs/figures/forecasts.png)
+![Forecasts](examples/figures/forecast.png)

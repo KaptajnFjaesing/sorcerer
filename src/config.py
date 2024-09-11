@@ -18,16 +18,18 @@ def get_default_model_config() -> Dict:
     - A dictionary containing the default model configuration.
     """
     model_config: Dict = {
-        "forecast_horizon": 0.5,
-        "target_standard_deviation": 0.01,
-        "number_of_individual_trend_changepoints": 20,
-        "number_of_individual_fourier_components": 10,
+        "test_train_split": 0.8,
+        "number_of_individual_trend_changepoints": 10,
+        "number_of_individual_fourier_components": 5,
+        "number_of_shared_fourier_components": 5,
         "period_threshold": 0.5,
-        "number_of_shared_seasonality_groups": 3,
+        "number_of_shared_seasonality_groups": 1,
         "delta_mu_prior": 0,
         "delta_b_prior": 0.4,
         "m_sigma_prior": 1,
         "k_sigma_prior": 1,
+        "precision_target_distribution_prior_alpha": 2,
+        "precision_target_distribution_prior_beta": 0.1,
         "relative_uncertainty_factor_prior": 1000
     }
     return model_config
