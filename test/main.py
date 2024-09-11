@@ -32,11 +32,10 @@ y_total = (df[unnormalized_column_group]-training_data[unnormalized_column_group
 # %% Define model
 
 sampler_config = {
-    "draws": 1_000,
-    "tune": 200,
-    "chains": 1,
-    "cores": 1,
-    "target_accept": 0.95,
+    "draws": 1_00,
+    "tune": 50,
+    "chains": 2,
+    "cores": 2
 }
 
 model_config = {
@@ -58,7 +57,6 @@ sorcerer = SorcererModel(
     sampler_config = sampler_config,
     model_config = model_config
     )
-
 
 
 # %% Fit model

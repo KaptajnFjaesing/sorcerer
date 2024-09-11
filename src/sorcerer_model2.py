@@ -151,10 +151,8 @@ class SorcererModel:
                 step=pm.HamiltonianMC()
             if step == "metropolis":
                 step=pm.Metropolis()
-            
-            sampler_args = {**sampler_config, **kwargs}
-            idata_temp = pm.sample(step = step, **sampler_args)
-        
+            idata_temp = pm.sample(step = step, **sampler_config)
+
         self.idata = self.set_idata_attrs(idata_temp)
 
     def set_idata_attrs(self, idata=None):
@@ -211,3 +209,6 @@ class SorcererModel:
     @property
     def _serializable_model_config(self) -> Dict[str, Union[int, float, Dict]]:
         return self.model_config
+    
+    def get_model(self):
+        return self.model
