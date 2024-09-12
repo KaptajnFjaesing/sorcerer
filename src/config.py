@@ -50,7 +50,7 @@ def get_default_sampler_config() -> Dict:
         "tune": 200,
         "chains": 1,
         "cores": 1,
-        "target_accept": 0.95,
+        "target_accept": 0.9,
     }
     return sampler_config
 

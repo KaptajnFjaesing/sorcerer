@@ -54,6 +54,8 @@ class SorcererModel:
         self.posterior_predictive: az.InferenceData
         self.model_name = model_name
         self.version = version
+        self.method = "NUTS"
+        self.map_estimate = None
         
     def build_model(self, X, y, **kwargs):
         """
@@ -142,27 +144,30 @@ class SorcererModel:
         y: pd.DataFrame,
         progressbar: bool = True,
         random_seed: pm.util.RandomState = None,
-        step: str = "NUTS",
+        method: str = "NUTS",
         **kwargs: Any,
     ) -> az.InferenceData:
         """
         Fits the model to the data using the specified sampler configuration.
         """
+        self.method = method
         self.build_model(X = X, y = y)
         sampler_config = self.sampler_config.copy()
         sampler_config["progressbar"] = progressbar
         sampler_config["random_seed"] = random_seed
         sampler_config.update(**kwargs)
         with self.model:
-            if step == "NUTS":
-                step=pm.NUTS()
-            if step == "HMC":
-                step=pm.HamiltonianMC()
-            if step == "metropolis":
-                step=pm.Metropolis()
-            idata_temp = pm.sample(step = step, **sampler_config)
-
-        self.idata = self.set_idata_attrs(idata_temp)
+            if self.method == "MAP":
+                self.map_estimate = [pm.find_MAP()]
+            else:
+                if self.method == "NUTS":
+                    step=pm.NUTS()
+                if self.method == "HMC":
+                    step=pm.HamiltonianMC()
+                if self.method == "metropolis":
+                    step=pm.Metropolis()
+                idata_temp = pm.sample(step = step, **sampler_config)
+                self.idata = self.set_idata_attrs(idata_temp)
 
     def set_idata_attrs(self, idata=None):
         """
@@ -191,7 +196,10 @@ class SorcererModel:
         """
         with self.model:
             pm.set_data({'input': X_pred})
-            self.posterior_predictive = pm.sample_posterior_predictive(self.idata, predictions=True, **kwargs)
+            if self.method == "MAP":
+                self.posterior_predictive = pm.sample_posterior_predictive(self.map_estimate, predictions=True, **kwargs)
+            else:
+                self.posterior_predictive = pm.sample_posterior_predictive(self.idata, predictions=True, **kwargs)
         
         preds_out_of_sample = self.posterior_predictive.predictions_constant_data.sortby('input')['input']
         model_preds = self.posterior_predictive.predictions.sortby(preds_out_of_sample)
@@ -255,12 +263,16 @@ class SorcererModel:
         >>> model.fit(data)
         >>> model.save('model_results.nc')  # This will call the overridden method in MyModel
         """
-        if self.idata is not None and "posterior" in self.idata:
-            file = Path(str(fname))
-            self.idata.to_netcdf(str(file))
+        
+        if self.method != "MAP":
+            raise RuntimeError("The MAP method cannot be saved.")
         else:
-            raise RuntimeError("The model hasn't been fit yet, call .fit() first")
-            
+            if self.idata is not None and "posterior" in self.idata:
+                file = Path(str(fname))
+                self.idata.to_netcdf(str(file))
+            else:
+                raise RuntimeError("The model hasn't been fit yet, call .fit() first")
+                
 
     def load(self, fname: str):
         filepath = Path(str(fname))

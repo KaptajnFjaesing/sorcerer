@@ -33,11 +33,12 @@ y_total = (df[unnormalized_column_group]-training_data[unnormalized_column_group
 
 model_name = "SorcererModel"
 version = "v0.1"
+method = "MAP"
 
 sampler_config = {
-    "draws": 2000,
-    "tune": 200,
-    "chains": 4,
+    "draws": 200,
+    "tune": 100,
+    "chains": 1,
     "cores": 1
 }
 
@@ -47,15 +48,20 @@ model_config = {
     "number_of_individual_fourier_components": 10,
     "number_of_shared_fourier_components": 5,
     "period_threshold": 0.5,
-    "number_of_shared_seasonality_groups": 1,
+    "number_of_shared_seasonality_groups": 2,
     "delta_mu_prior": 0,
-    "delta_b_prior": 0.2,
-    "m_sigma_prior": 1,
-    "k_sigma_prior": 1,
+    "delta_b_prior": 0.1,
+    "m_sigma_prior": 0.1,
+    "k_sigma_prior": 0.1,
     "precision_target_distribution_prior_alpha": 2,
     "precision_target_distribution_prior_beta": 0.1,
     "relative_uncertainty_factor_prior": 1000
 }
+
+if method == "MAP":
+    model_config['precision_target_distribution_prior_alpha'] = 100
+    model_config['precision_target_distribution_prior_beta'] = 0.01
+    
 
 sorcerer = SorcererModel(
     sampler_config = sampler_config,
@@ -69,11 +75,13 @@ sorcerer = SorcererModel(
 sorcerer.fit(
     X = x_train,
     y = y_train,
-    step="NUTS"
+    method = method
     )
 
-fname = "examples/models/sorcer_model_v01.nc"
-sorcerer.save(fname)
+if method != "MAP":
+    fname = "examples/models/sorcer_model_v02.nc"
+    sorcerer.save(fname)
+
 #%% Produce forecast
 
 """
@@ -101,7 +109,9 @@ axs = axs.flatten()
 # Loop through each column to plot
 for i in range(y_test.shape[1]):
     ax = axs[i]  # Get the correct subplot
-    ax.plot(x_total, y_total[y_total.columns[i]], color = 'tab:red',  label='Data')
+    
+    ax.plot(x_train, y_train[y_train.columns[i]], color = 'tab:red',  label='Training Data')
+    ax.plot(x_test, y_test[y_test.columns[i]], color = 'black',  label='Test Data')
     ax.plot(preds_out_of_sample, (model_preds["target_distribution"].mean(("chain", "draw")).T)[i], color = 'tab:blue', label='Model')
     ax.fill_between(
         preds_out_of_sample.values,
