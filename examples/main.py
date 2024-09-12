@@ -60,7 +60,7 @@ model_config = {
 
 if method == "MAP":
     model_config['precision_target_distribution_prior_alpha'] = 100
-    model_config['precision_target_distribution_prior_beta'] = 0.01
+    model_config['precision_target_distribution_prior_beta'] = 0.1
     
 
 sorcerer = SorcererModel(
@@ -101,7 +101,7 @@ n_cols = 2  # We want 2 columns
 n_rows = int(np.ceil(y_test.shape[1] / n_cols))  # Number of rows needed
 
 # Create subplots with 2 columns and computed rows
-fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(10, 5 * n_rows), constrained_layout=True)
+fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(20, 5 * n_rows), constrained_layout=True)
 
 # Flatten the axs array to iterate over it easily
 axs = axs.flatten()
@@ -129,4 +129,4 @@ for i in range(y_test.shape[1]):
 for j in range(i + 1, len(axs)):
     fig.delaxes(axs[j])  # Remove unused axes to clean up the figure
 
-plt.savefig('./examples/figures/forecast.pdf')
+plt.savefig('./examples/figures/forecast.png')
