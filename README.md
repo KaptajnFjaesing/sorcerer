@@ -28,12 +28,12 @@ df = normalized_weekly_store_category_household_sales()
 
 ## Define model
 ```python
-n_weeks = 40
+forecast_horizon = 40
 time_series_columns = [x for x in df.columns if ('HOUSEHOLD' in x and 'normalized' not in x) or ('date' in x)]
 
 df_time_series = df[time_series_columns]
-training_data = df_time_series.iloc[:-n_weeks]
-test_data = df_time_series.iloc[-n_weeks:]
+training_data = df_time_series.iloc[:-forecast_horizon]
+test_data = df_time_series.iloc[-forecast_horizon:]
 
 
 model_name = "SorcererModel"
