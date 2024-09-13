@@ -26,38 +26,23 @@ df = normalized_weekly_store_category_household_sales()
 
 ```
 
-## Ensure format
-```python
-n_weeks = 52
-normalized_column_group = [x for x in df.columns if '_normalized' in x ]
-unnormalized_column_group = [x for x in df.columns if 'HOUSEHOLD' in x and 'normalized' not in x]
-
-training_data = df.iloc[:-n_weeks]
-test_data = df.iloc[-n_weeks:]
-```
-
-## Feature engineering
-```python
-
-x_train = (training_data['date'].astype('int64')//10**9 - (training_data['date'].astype('int64')//10**9).min())/((training_data['date'].astype('int64')//10**9).max() - (training_data['date'].astype('int64')//10**9).min())
-y_train = (training_data[unnormalized_column_group]-training_data[unnormalized_column_group].min())/(training_data[unnormalized_column_group].max()-training_data[unnormalized_column_group].min())
-
-x_test = (test_data['date'].astype('int64')//10**9 - (training_data['date'].astype('int64')//10**9).min())/((training_data['date'].astype('int64')//10**9).max() - (training_data['date'].astype('int64')//10**9).min())
-y_test = (test_data[unnormalized_column_group]-training_data[unnormalized_column_group].min())/(training_data[unnormalized_column_group].max()-training_data[unnormalized_column_group].min())
-
-x_total = (df['date'].astype('int64')//10**9 - (training_data['date'].astype('int64')//10**9).min())/((training_data['date'].astype('int64')//10**9).max() - (training_data['date'].astype('int64')//10**9).min())
-y_total = (df[unnormalized_column_group]-training_data[unnormalized_column_group].min())/(training_data[unnormalized_column_group].max()-training_data[unnormalized_column_group].min())
-```
-
 ## Define model
-
 ```python
+n_weeks = 40
+time_series_columns = [x for x in df.columns if ('HOUSEHOLD' in x and 'normalized' not in x) or ('date' in x)]
+
+df_time_series = df[time_series_columns]
+training_data = df_time_series.iloc[:-n_weeks]
+test_data = df_time_series.iloc[-n_weeks:]
+
+
 model_name = "SorcererModel"
 version = "v0.1"
+method = "NUTS"
 
 sampler_config = {
     "draws": 2000,
-    "tune": 200,
+    "tune": 500,
     "chains": 4,
     "cores": 1
 }
@@ -68,15 +53,20 @@ model_config = {
     "number_of_individual_fourier_components": 10,
     "number_of_shared_fourier_components": 5,
     "period_threshold": 0.5,
-    "number_of_shared_seasonality_groups": 1,
+    "number_of_shared_seasonality_groups": 2,
     "delta_mu_prior": 0,
-    "delta_b_prior": 0.2,
+    "delta_b_prior": 0.3,
     "m_sigma_prior": 1,
     "k_sigma_prior": 1,
     "precision_target_distribution_prior_alpha": 2,
     "precision_target_distribution_prior_beta": 0.1,
     "relative_uncertainty_factor_prior": 1000
 }
+
+if method == "MAP":
+    model_config['precision_target_distribution_prior_alpha'] = 100
+    model_config['precision_target_distribution_prior_beta'] = 0.05
+    
 
 sorcerer = SorcererModel(
     sampler_config = sampler_config,
@@ -88,54 +78,69 @@ sorcerer = SorcererModel(
 
 ## Fit model
 ```python
+seasonality_periods = np.array([52])
+
 sorcerer.fit(
-    X = x_train,
-    y = y_train,
-    step="NUTS"
+    training_data = training_data,
+    seasonality_periods = seasonality_periods,
+    method = method
     )
 
-fname = "examples/models/sorcer_model_v01.nc"
-sorcerer.save(fname) # save model
+if method != "MAP":
+    fname = "examples/models/sorcer_model_v02.nc"
+    sorcerer.save(fname)
+```
 
+```python
+Normalized periods: [0.30952381]
 Sequential sampling (4 chains in 1 job)
 CompoundStep
->NUTS: [linear1_k, linear1_delta, linear1_m, fourier_coefficients_seasonality_individual1, season_parameter_seasonality_individual1, fourier_coefficients_seasonality_shared, season_parameter_seasonality_shared, model_probs, precision_target_distribution]
->BinaryGibbsMetropolis: [chosen_model_index]
-Sampling chain 0, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:09:21
-Sampling chain 1, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:10:05
-Sampling chain 2, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:09:54
-Sampling chain 3, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:09:57
-Sampling 4 chains for 200 tune and 2_000 draw iterations (800 + 8_000 draws total) took 2359 seconds.
+>NUTS: [linear_k, linear_delta, linear_m, fourier_coefficients_seasonality_individual_0.31, season_parameter_seasonality_individual_0.31, fourier_coefficients_seasonality_shared_0.31, season_parameter_seasonality_shared_0.31, model_probs, precision_target_distribution]
+>CategoricalGibbsMetropolis: [chosen_model_index]
+Sampling chain 0, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:11:44
+Sampling chain 1, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:12:25
+Sampling chain 2, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:12:33
+Sampling chain 3, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:12:29
+Sampling 4 chains for 500 tune and 2_000 draw iterations (2_000 + 8_000 draws total) took 2953 seconds.
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details
 ```
 
 ## Produce forecasts
 ```python
-(preds_out_of_sample, model_preds) = sorcerer.sample_posterior_predictive(X_pred = x_test)
+(preds_out_of_sample, model_preds) = sorcerer.sample_posterior_predictive(test_data = df_time_series)
+```
 
+```python
 Sampling: [target_distribution]
 Sampling ... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:00:02
 ```
 
 ## Plot forecasts along with test and training data
 ```python
+(X_train, y_train, X_test, y_test) = sorcerer.normalize_data(
+        training_data,
+        test_data
+        )
+
 hdi_values = az.hdi(model_preds)["target_distribution"].transpose("hdi", ...)
 
 # Calculate the number of rows needed for 2 columns
 n_cols = 2  # We want 2 columns
-n_rows = int(np.ceil(y_test.shape[1] / n_cols))  # Number of rows needed
+n_rows = int(np.ceil((len(time_series_columns)-1) / n_cols))  # Number of rows needed
 
-# Create subplots with 2 columns and computed rows
-fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(10, 5 * n_rows), constrained_layout=True)
+# Create subplots with 2 columns and computed rows   
+fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(15, 5 * n_rows), constrained_layout=True)
 
 # Flatten the axs array to iterate over it easily
 axs = axs.flatten()
 
 # Loop through each column to plot
-for i in range(y_test.shape[1]):
+for i in range(len(time_series_columns)-1):
     ax = axs[i]  # Get the correct subplot
-    ax.plot(x_total, y_total[y_total.columns[i]], color = 'tab:red',  label='Training Data')
+    
+    ax.plot(X_train, y_train[y_train.columns[i]], color = 'tab:red',  label='Training Data')
+    ax.plot(X_test, y_test[y_test.columns[i]], color = 'black',  label='Test Data')
     ax.plot(preds_out_of_sample, (model_preds["target_distribution"].mean(("chain", "draw")).T)[i], color = 'tab:blue', label='Model')
     ax.fill_between(
         preds_out_of_sample.values,

@@ -1,3 +1,4 @@
+#%%
 """
 Created on Mon Sep  9 20:22:19 2024
 
@@ -13,32 +14,24 @@ from src.sorcerer_model import SorcererModel
 
 df = normalized_weekly_store_category_household_sales()
 
-n_weeks = 52
-normalized_column_group = [x for x in df.columns if '_normalized' in x ]
-unnormalized_column_group = [x for x in df.columns if 'HOUSEHOLD' in x and 'normalized' not in x]
-
-training_data = df.iloc[:-n_weeks]
-test_data = df.iloc[-n_weeks:]
-
-# Feature engineering
-x_train = (training_data['date'].astype('int64')//10**9 - (training_data['date'].astype('int64')//10**9).min())/((training_data['date'].astype('int64')//10**9).max() - (training_data['date'].astype('int64')//10**9).min())
-y_train = (training_data[unnormalized_column_group]-training_data[unnormalized_column_group].min())/(training_data[unnormalized_column_group].max()-training_data[unnormalized_column_group].min())
-
-x_test = (test_data['date'].astype('int64')//10**9 - (training_data['date'].astype('int64')//10**9).min())/((training_data['date'].astype('int64')//10**9).max() - (training_data['date'].astype('int64')//10**9).min())
-y_test = (test_data[unnormalized_column_group]-training_data[unnormalized_column_group].min())/(training_data[unnormalized_column_group].max()-training_data[unnormalized_column_group].min())
-
-x_total = (df['date'].astype('int64')//10**9 - (training_data['date'].astype('int64')//10**9).min())/((training_data['date'].astype('int64')//10**9).max() - (training_data['date'].astype('int64')//10**9).min())
-y_total = (df[unnormalized_column_group]-training_data[unnormalized_column_group].min())/(training_data[unnormalized_column_group].max()-training_data[unnormalized_column_group].min())
 # %% Define model
+
+n_weeks = 40
+time_series_columns = [x for x in df.columns if ('HOUSEHOLD' in x and 'normalized' not in x) or ('date' in x)]
+
+df_time_series = df[time_series_columns]
+training_data = df_time_series.iloc[:-n_weeks]
+test_data = df_time_series.iloc[-n_weeks:]
+
 
 model_name = "SorcererModel"
 version = "v0.1"
-method = "MAP"
+method = "NUTS"
 
 sampler_config = {
-    "draws": 200,
-    "tune": 100,
-    "chains": 1,
+    "draws": 2000,
+    "tune": 500,
+    "chains": 4,
     "cores": 1
 }
 
@@ -50,9 +43,9 @@ model_config = {
     "period_threshold": 0.5,
     "number_of_shared_seasonality_groups": 2,
     "delta_mu_prior": 0,
-    "delta_b_prior": 0.1,
-    "m_sigma_prior": 0.1,
-    "k_sigma_prior": 0.1,
+    "delta_b_prior": 0.3,
+    "m_sigma_prior": 1,
+    "k_sigma_prior": 1,
     "precision_target_distribution_prior_alpha": 2,
     "precision_target_distribution_prior_beta": 0.1,
     "relative_uncertainty_factor_prior": 1000
@@ -60,7 +53,7 @@ model_config = {
 
 if method == "MAP":
     model_config['precision_target_distribution_prior_alpha'] = 100
-    model_config['precision_target_distribution_prior_beta'] = 0.1
+    model_config['precision_target_distribution_prior_beta'] = 0.05
     
 
 sorcerer = SorcererModel(
@@ -72,9 +65,12 @@ sorcerer = SorcererModel(
 
 
 # %% Fit model
+
+seasonality_periods = np.array([52])
+
 sorcerer.fit(
-    X = x_train,
-    y = y_train,
+    training_data = training_data,
+    seasonality_periods = seasonality_periods,
     method = method
     )
 
@@ -90,28 +86,32 @@ fname = "examples/models/sorcer_model_v01.nc"
 sorcerer.load(fname)
 """
 
-(preds_out_of_sample, model_preds) = sorcerer.sample_posterior_predictive(X_pred = x_total)
+(preds_out_of_sample, model_preds) = sorcerer.sample_posterior_predictive(test_data = df_time_series)
 
 #%% Plot forecast along with test data
+(X_train, y_train, X_test, y_test) = sorcerer.normalize_data(
+        training_data,
+        test_data
+        )
 
 hdi_values = az.hdi(model_preds)["target_distribution"].transpose("hdi", ...)
 
 # Calculate the number of rows needed for 2 columns
 n_cols = 2  # We want 2 columns
-n_rows = int(np.ceil(y_test.shape[1] / n_cols))  # Number of rows needed
+n_rows = int(np.ceil((len(time_series_columns)-1) / n_cols))  # Number of rows needed
 
-# Create subplots with 2 columns and computed rows
-fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(20, 5 * n_rows), constrained_layout=True)
+# Create subplots with 2 columns and computed rows   
+fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(15, 5 * n_rows), constrained_layout=True)
 
 # Flatten the axs array to iterate over it easily
 axs = axs.flatten()
 
 # Loop through each column to plot
-for i in range(y_test.shape[1]):
+for i in range(len(time_series_columns)-1):
     ax = axs[i]  # Get the correct subplot
     
-    ax.plot(x_train, y_train[y_train.columns[i]], color = 'tab:red',  label='Training Data')
-    ax.plot(x_test, y_test[y_test.columns[i]], color = 'black',  label='Test Data')
+    ax.plot(X_train, y_train[y_train.columns[i]], color = 'tab:red',  label='Training Data')
+    ax.plot(X_test, y_test[y_test.columns[i]], color = 'black',  label='Test Data')
     ax.plot(preds_out_of_sample, (model_preds["target_distribution"].mean(("chain", "draw")).T)[i], color = 'tab:blue', label='Model')
     ax.fill_between(
         preds_out_of_sample.values,
@@ -129,4 +129,5 @@ for i in range(y_test.shape[1]):
 for j in range(i + 1, len(axs)):
     fig.delaxes(axs[j])  # Remove unused axes to clean up the figure
 
+# %%
 plt.savefig('./examples/figures/forecast.png')

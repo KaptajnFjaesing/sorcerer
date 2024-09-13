@@ -5,54 +5,25 @@ Created on Tue Sep 10 19:24:46 2024
 """
 
 import numpy as np
+import pandas as pd
 import pymc as pm
 import pytensor as pt
 import hashlib
 import json
 from typing import (
     Dict, 
-    Union,
-    Tuple
+    Union
     )
 
-def determine_significant_periods(
-    series: np.array,
-    x_train: np.array,
-    threshold: float
-) -> Tuple[float, np.array]:
-    """
-    Determine the significant periods in a time series using FFT.
-
-    Parameters:
-    - series: numpy array of the time series data.
-    - x_train: numpy array of the training data (time points).
-    - threshold: float threshold to determine significance.
-
-    Returns:
-    - dominant_period: float of the most dominant period.
-    - significant_periods: numpy array of significant periods above the threshold.
-    """
-    # FFT of the time series
-    fft_result = np.fft.fft(series)
-    fft_magnitude = np.abs(fft_result)
-    fft_freqs = np.fft.fftfreq(len(series), x_train[1] - x_train[0])
-
-    # Get positive frequencies
-    positive_freqs = fft_freqs[fft_freqs > 0]
-    positive_magnitudes = fft_magnitude[fft_freqs > 0]
-
-    # Find the dominant component
-    max_magnitude = np.max(positive_magnitudes)
-    max_index = np.argmax(positive_magnitudes)
-    dominant_frequency = positive_freqs[max_index]
-    dominant_period = 1 / dominant_frequency
-
-    # Find components that are more than the threshold fraction of the maximum
-    significant_indices = np.where(positive_magnitudes >= threshold * max_magnitude)[0]
-    significant_frequencies = positive_freqs[significant_indices]
-    significant_periods = 1 / significant_frequencies
-
-    return dominant_period, significant_periods
+def normalize_training_data(training_data: pd.DataFrame) -> tuple:
+    time_series_columns = [x for x in training_data.columns if 'date' not in x]
+    x_training_min = (training_data['date'].astype('int64')//10**9).min()
+    x_training_max = (training_data['date'].astype('int64')//10**9).max()
+    y_training_min = training_data[time_series_columns].min()
+    y_training_max = training_data[time_series_columns].max()
+    x_train = (training_data['date'].astype('int64')//10**9 - x_training_min)/(x_training_max - x_training_min)
+    y_train = (training_data[time_series_columns]-y_training_min)/(y_training_max-y_training_min)
+    return x_train, x_training_min, x_training_max, y_train, y_training_min, y_training_max
 
 def create_fourier_features(
     x: np.array,

@@ -29,7 +29,7 @@ from src.model_components import (
 )
 from src.utils import (
     generate_hash_id,
-    determine_significant_periods
+    normalize_training_data
     )
 
 
@@ -56,8 +56,12 @@ class SorcererModel:
         self.version = version
         self.method = "NUTS"
         self.map_estimate = None
+        self.x_training_min = None
+        self.x_training_max = None
+        self.y_training_min = None
+        self.y_training_max = None
         
-    def build_model(self, X, y, **kwargs):
+    def build_model(self, X, y, seasonality_periods, **kwargs):
         """
         Builds the PyMC model based on the input data and configuration.
         """
@@ -67,27 +71,18 @@ class SorcererModel:
 
         # Extract prior parameters from model configuration
         config = self.model_config
-        (
-            dominant_period,
-            significant_periods,
-        ) = determine_significant_periods(
-            series=y.values[:, 0],
-            x_train=X.values,
-            threshold=config["period_threshold"],
-        )
-        seasonality_period_baseline = min(significant_periods)
-
+        
         # Define PyMC model
         with pm.Model() as self.model:
             x = pm.Data('input', X, dims='number_of_input_observations')
             y = pm.Data('target', y, dims=['number_of_target_observations', 'number_of_time_series'])
 
             # Add model components
-            linear_term1 = add_linear_term(
+            linear_term = add_linear_term(
                 x=x,
                 baseline_slope=baseline_slope,
                 baseline_bias=baseline_bias,
-                trend_name='linear1',
+                trend_name='linear',
                 number_of_time_series=number_of_time_series,
                 number_of_trend_changepoints=config["number_of_individual_trend_changepoints"],
                 maximum_x_value= 1/config["test_train_split"],
@@ -97,35 +92,39 @@ class SorcererModel:
                 k_sigma_prior=config["k_sigma_prior"],
                 model=self.model
             )
+            
+            seasonality_individual = pm.math.sum([
+                add_fourier_term(
+                    x=x,
+                    number_of_fourier_components=config["number_of_individual_fourier_components"],
+                    name=f'seasonality_individual_{round(seasonality_period_baseline,2)}',
+                    dimension=number_of_time_series,
+                    seasonality_period_baseline=seasonality_period_baseline,
+                    relative_uncertainty_factor_prior=config["relative_uncertainty_factor_prior"],
+                    model=self.model
+                ) for seasonality_period_baseline in seasonality_periods
+                ], axis = 0)
 
-            seasonality_individual1 = add_fourier_term(
-                x=x,
-                number_of_fourier_components=config["number_of_individual_fourier_components"],
-                name='seasonality_individual1',
-                dimension=number_of_time_series,
-                seasonality_period_baseline=seasonality_period_baseline,
-                relative_uncertainty_factor_prior=config["relative_uncertainty_factor_prior"],
-                model=self.model
-            )
-
-            seasonality_shared = add_fourier_term(
-                x=x,
-                number_of_fourier_components=config["number_of_shared_fourier_components"],
-                name='seasonality_shared',
-                dimension=config["number_of_shared_seasonality_groups"],
-                seasonality_period_baseline=seasonality_period_baseline,
-                relative_uncertainty_factor_prior=config["relative_uncertainty_factor_prior"],
-                model=self.model
-            )
-
+            seasonality_shared = pm.math.sum([
+                add_fourier_term(
+                    x=x,
+                    number_of_fourier_components=config["number_of_shared_fourier_components"],
+                    name=f'seasonality_shared_{round(seasonality_period_baseline,2)}',
+                    dimension=config["number_of_shared_seasonality_groups"],
+                    seasonality_period_baseline=seasonality_period_baseline,
+                    relative_uncertainty_factor_prior=config["relative_uncertainty_factor_prior"],
+                    model=self.model
+                ) for seasonality_period_baseline in seasonality_periods
+                ], axis = 0)
+                        
             all_models = pm.math.concatenate([x[:, None] * 0, seasonality_shared], axis=1)
             model_probs = pm.Dirichlet('model_probs', a=np.ones(config["number_of_shared_seasonality_groups"]+1), shape=(number_of_time_series, config["number_of_shared_seasonality_groups"]+1))
             chosen_model_index = pm.Categorical('chosen_model_index', p=model_probs, shape=number_of_time_series)
             shared_seasonality_models = all_models[:, chosen_model_index]
             
             prediction = (
-                linear_term1 +
-                seasonality_individual1 +
+                linear_term +
+                seasonality_individual +
                 shared_seasonality_models
             )
             
@@ -140,8 +139,8 @@ class SorcererModel:
 
     def fit(
         self,
-        X: pd.DataFrame,
-        y: pd.DataFrame,
+        training_data: pd.DataFrame,
+        seasonality_periods: np.array,
         progressbar: bool = True,
         random_seed: pm.util.RandomState = None,
         method: str = "NUTS",
@@ -151,7 +150,20 @@ class SorcererModel:
         Fits the model to the data using the specified sampler configuration.
         """
         self.method = method
-        self.build_model(X = X, y = y)
+        (
+            X,
+            self.x_training_min,
+            self.x_training_max,
+            y,
+            self.y_training_min,
+            self.y_training_max
+            )  = normalize_training_data(training_data = training_data)
+        print("Normalized periods:", seasonality_periods*(X[1]-X[0]))
+        self.build_model(
+            X = X,
+            y = y,
+            seasonality_periods = seasonality_periods*(X[1]-X[0])
+            )
         sampler_config = self.sampler_config.copy()
         sampler_config["progressbar"] = progressbar
         sampler_config["random_seed"] = random_seed
@@ -188,14 +200,15 @@ class SorcererModel:
 
     def sample_posterior_predictive(
         self,
-        X_pred,
+        test_data,
         **kwargs
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Samples from the posterior predictive distribution using the fitted model.
         """
         with self.model:
-            pm.set_data({'input': X_pred})
+            x_test = (test_data['date'].astype('int64')//10**9 - self.x_training_min)/(self.x_training_max - self.x_training_min)
+            pm.set_data({'input': x_test})
             if self.method == "MAP":
                 self.posterior_predictive = pm.sample_posterior_predictive(self.map_estimate, predictions=True, **kwargs)
             else:
@@ -205,7 +218,28 @@ class SorcererModel:
         model_preds = self.posterior_predictive.predictions.sortby(preds_out_of_sample)
 
         return preds_out_of_sample, model_preds
-
+    
+    def normalize_data(self,
+                       training_data,
+                       test_data
+                       )-> tuple:
+        if self.x_training_min is not None:
+            time_series_columns = [x for x in training_data.columns if 'date' not in x]
+            X_train = (training_data['date'].astype('int64')//10**9 - self.x_training_min)/(self.x_training_max - self.x_training_min)
+            y_train = (training_data[time_series_columns]-self.y_training_min)/(self.y_training_max-self.y_training_min)
+            
+            X_test = (test_data['date'].astype('int64')//10**9 - self.x_training_min)/(self.x_training_max - self.x_training_min)
+            y_test = (test_data[time_series_columns]-self.y_training_min)/(self.y_training_max-self.y_training_min)
+            return (
+                X_train,
+                y_train,
+                X_test,
+                y_test
+                )
+        else:
+            raise RuntimeError("Data can only be normalized after .fit() has been called.")
+            return None
+    
     def get_posterior_predictive(self) -> az.InferenceData:
         """
         Returns the posterior predictive distribution.
@@ -264,14 +298,14 @@ class SorcererModel:
         >>> model.save('model_results.nc')  # This will call the overridden method in MyModel
         """
         
-        if self.method != "MAP":
-            raise RuntimeError("The MAP method cannot be saved.")
+     
+        if self.idata is not None and "posterior" in self.idata:
+            if self.method == "MAP":
+                raise RuntimeError("The MAP method cannot be saved.")
+            file = Path(str(fname))
+            self.idata.to_netcdf(str(file))
         else:
-            if self.idata is not None and "posterior" in self.idata:
-                file = Path(str(fname))
-                self.idata.to_netcdf(str(file))
-            else:
-                raise RuntimeError("The model hasn't been fit yet, call .fit() first")
+            raise RuntimeError("The model hasn't been fit yet, call .fit() first")
                 
 
     def load(self, fname: str):
