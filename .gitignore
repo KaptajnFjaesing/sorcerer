@@ -5,4 +5,3 @@ data/sell_prices.csv
 src/__pycache__/
 examples/__pycache__/
 examples/models/
-examples/metric.py
