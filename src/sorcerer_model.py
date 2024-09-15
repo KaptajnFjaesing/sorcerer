@@ -92,7 +92,7 @@ class SorcererModel:
                 k_sigma_prior=config["k_sigma_prior"],
                 model=self.model
             )
-            
+
             seasonality_individual = pm.math.sum([
                 add_fourier_term(
                     x=x,
@@ -105,22 +105,25 @@ class SorcererModel:
                 ) for seasonality_period_baseline in seasonality_periods
                 ], axis = 0)
 
-            seasonality_shared = pm.math.sum([
-                add_fourier_term(
-                    x=x,
-                    number_of_fourier_components=config["number_of_shared_fourier_components"],
-                    name=f'seasonality_shared_{round(seasonality_period_baseline,2)}',
-                    dimension=config["number_of_shared_seasonality_groups"],
-                    seasonality_period_baseline=seasonality_period_baseline,
-                    relative_uncertainty_factor_prior=config["relative_uncertainty_factor_prior"],
-                    model=self.model
-                ) for seasonality_period_baseline in seasonality_periods
-                ], axis = 0)
-                        
-            all_models = pm.math.concatenate([x[:, None] * 0, seasonality_shared], axis=1)
-            model_probs = pm.Dirichlet('model_probs', a=np.ones(config["number_of_shared_seasonality_groups"]+1), shape=(number_of_time_series, config["number_of_shared_seasonality_groups"]+1))
-            chosen_model_index = pm.Categorical('chosen_model_index', p=model_probs, shape=number_of_time_series)
-            shared_seasonality_models = all_models[:, chosen_model_index]
+            if config["number_of_shared_seasonality_groups"] > 0 :
+                seasonality_shared = pm.math.sum([
+                    add_fourier_term(
+                        x=x,
+                        number_of_fourier_components=config["number_of_shared_fourier_components"],
+                        name=f'seasonality_shared_{round(seasonality_period_baseline,2)}',
+                        dimension=config["number_of_shared_seasonality_groups"],
+                        seasonality_period_baseline=seasonality_period_baseline,
+                        relative_uncertainty_factor_prior=config["relative_uncertainty_factor_prior"],
+                        model=self.model
+                    ) for seasonality_period_baseline in seasonality_periods
+                    ], axis = 0)
+                            
+                all_models = pm.math.concatenate([x[:, None] * 0, seasonality_shared], axis=1)
+                model_probs = pm.Dirichlet('model_probs', a=np.ones(config["number_of_shared_seasonality_groups"]+1), shape=(number_of_time_series, config["number_of_shared_seasonality_groups"]+1))
+                chosen_model_index = pm.Categorical('chosen_model_index', p=model_probs, shape=number_of_time_series)
+                shared_seasonality_models = all_models[:, chosen_model_index]
+            else:
+                shared_seasonality_models = 0
             
             prediction = (
                 linear_term +

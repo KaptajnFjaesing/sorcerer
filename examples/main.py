@@ -16,18 +16,24 @@ df = normalized_weekly_store_category_household_sales()
 
 # %% Define model
 
-n_weeks = 40
 time_series_columns = [x for x in df.columns if ('HOUSEHOLD' in x and 'normalized' not in x) or ('date' in x)]
+unnormalized_column_group = [x for x in df.columns if 'HOUSEHOLD' in x and 'normalized' not in x]
 
 df_time_series = df[time_series_columns]
-training_data = df_time_series.iloc[:-n_weeks]
-test_data = df_time_series.iloc[-n_weeks:]
-
 
 model_name = "SorcererModel"
 version = "v0.1"
-method = "NUTS"
+method = "MAP"
+seasonality_periods = np.array([52])
+forecast_horizon = 52
 
+training_data = df_time_series.iloc[:-forecast_horizon]
+test_data = df_time_series.iloc[-forecast_horizon:]
+
+y_train_min = training_data[unnormalized_column_group].min()
+y_train_max = training_data[unnormalized_column_group].max()
+
+# Sorcerer
 sampler_config = {
     "draws": 2000,
     "tune": 500,
@@ -36,28 +42,25 @@ sampler_config = {
 }
 
 model_config = {
-    "test_train_split": len(training_data)/len(df),
-    "number_of_individual_trend_changepoints": 20,
-    "number_of_individual_fourier_components": 10,
-    "number_of_shared_fourier_components": 5,
-    "period_threshold": 0.5,
-    "number_of_shared_seasonality_groups": 2,
+    "test_train_split": len(training_data)/len(df_time_series),
+    "number_of_individual_trend_changepoints": 10,
+    "number_of_individual_fourier_components": 5,
+    "number_of_shared_fourier_components": 3,
+    "number_of_shared_seasonality_groups": 1,
     "delta_mu_prior": 0,
     "delta_b_prior": 0.3,
-    "m_sigma_prior": 1,
-    "k_sigma_prior": 1,
-    "precision_target_distribution_prior_alpha": 2,
-    "precision_target_distribution_prior_beta": 0.1,
+    "m_sigma_prior": 3,
+    "k_sigma_prior": 3,
+    "precision_target_distribution_prior_alpha": 100,
+    "precision_target_distribution_prior_beta": 0.05,
     "relative_uncertainty_factor_prior": 1000
 }
 
 if method == "MAP":
     model_config['precision_target_distribution_prior_alpha'] = 100
     model_config['precision_target_distribution_prior_beta'] = 0.05
-    
 
 sorcerer = SorcererModel(
-    sampler_config = sampler_config,
     model_config = model_config,
     model_name = model_name,
     version = version
@@ -65,8 +68,6 @@ sorcerer = SorcererModel(
 
 
 # %% Fit model
-
-seasonality_periods = np.array([52])
 
 sorcerer.fit(
     training_data = training_data,
