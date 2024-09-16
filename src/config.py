@@ -48,7 +48,8 @@ def get_default_sampler_config() -> Dict:
         "draws": 1000,
         "tune": 200,
         "chains": 1,
-        "cores": 1
+        "cores": 1,
+        "sampler": "NUTS"
     }
     return sampler_config
 

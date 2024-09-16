@@ -22,7 +22,6 @@ df_time_series = df[time_series_columns]
 
 model_name = "SorcererModel"
 version = "v0.1"
-method = "MAP"
 seasonality_periods = np.array([52])
 
 
@@ -67,37 +66,41 @@ for forecast_horizon in range(min_forecast_horizon,max_forecast_horizon+1):
         "draws": 500,
         "tune": 100,
         "chains": 1,
-        "cores": 1
+        "cores": 1,
+        "sampler": "MAP"
     }
+
+    """
+     TO THIS POINT:
+          try: len(training_data)/len(df_time_series) or 0.8 again. Go back to what seemed to work and understand why it did.
     
+    
+    """
+
     model_config = {
-        "test_train_split": len(training_data)/len(df_time_series),
+        "test_train_split": 1,
         "number_of_individual_trend_changepoints": 10,
-        "number_of_individual_fourier_components": 10,
-        "number_of_shared_fourier_components": 7,
-        "number_of_shared_seasonality_groups": 4,
+        "number_of_individual_fourier_components": 8,
+        "number_of_shared_fourier_components": 5,
+        "number_of_shared_seasonality_groups": 2,
         "delta_mu_prior": 0,
-        "delta_b_prior": 0.3,
-        "m_sigma_prior": 5,
-        "k_sigma_prior": 5,
+        "delta_b_prior": 0.2,
+        "m_sigma_prior": 1,
+        "k_sigma_prior": 1,
         "precision_target_distribution_prior_alpha": 2,
         "precision_target_distribution_prior_beta": 0.1,
         "relative_uncertainty_factor_prior": 1000
     }
     
-    if method == "MAP":
-        model_config['precision_target_distribution_prior_alpha'] = 100
-        model_config['precision_target_distribution_prior_beta'] = 0.05
-    
     sorcerer = SorcererModel(
         model_config = model_config,
         model_name = model_name,
+        sampler_config = sampler_config,
         version = version
         )
     sorcerer.fit(
         training_data = training_data,
-        seasonality_periods = seasonality_periods,
-        method = method
+        seasonality_periods = seasonality_periods
         )
     (preds_out_of_sample, model_preds) = sorcerer.sample_posterior_predictive(
         test_data = test_data,
@@ -182,7 +185,7 @@ stacked_sorcerer.to_pickle(r'C:\Users\roman\Documents\git\TimeSeriesForecastingR
 #%% Compare exponential smoothing to sorcerer via residuals
 import matplotlib.pyplot as plt
 
-iteration = -1
+iteration = -25
 horizon = forecast_horizon+iteration+1
 
 exp_forecast = model_forecasts_exponential[iteration]

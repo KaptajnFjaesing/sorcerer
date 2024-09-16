@@ -43,18 +43,13 @@ class SorcererModel:
         version: str = None
     ):
         # Initialize configurations
-        sampler_config = (
-            get_default_sampler_config() if sampler_config is None else sampler_config
-        )
-        self.sampler_config = sampler_config
-        model_config = get_default_model_config() if model_config is None else model_config
-        self.model_config = model_config  # parameters for priors, etc.
+        self.sampler_config = (get_default_sampler_config() if sampler_config is None else sampler_config)
+        self.model_config = (get_default_model_config() if model_config is None else model_config)
         self.model = None  # Set by build_model
         self.idata: az.InferenceData | None = None  # idata is generated during fitting
         self.posterior_predictive: az.InferenceData
         self.model_name = model_name
         self.version = version
-        self.method = "NUTS"
         self.map_estimate = None
         self.x_training_min = None
         self.x_training_max = None
@@ -68,58 +63,53 @@ class SorcererModel:
         number_of_time_series = y.shape[1]
         baseline_slope = (y.values[-1] - y.values[0]) / (X.values[-1] - X.values[0])
         baseline_bias = y.values[0]
-
-        # Extract prior parameters from model configuration
-        config = self.model_config
         
-        # Define PyMC model
         with pm.Model() as self.model:
             x = pm.Data('input', X, dims='number_of_input_observations')
             y = pm.Data('target', y, dims=['number_of_target_observations', 'number_of_time_series'])
 
-            # Add model components
             linear_term = add_linear_term(
                 x=x,
                 baseline_slope=baseline_slope,
                 baseline_bias=baseline_bias,
                 trend_name='linear',
                 number_of_time_series=number_of_time_series,
-                number_of_trend_changepoints=config["number_of_individual_trend_changepoints"],
-                maximum_x_value= 1/config["test_train_split"],
-                delta_mu_prior=config["delta_mu_prior"],
-                delta_b_prior=config["delta_b_prior"],
-                m_sigma_prior=config["m_sigma_prior"],
-                k_sigma_prior=config["k_sigma_prior"],
+                number_of_trend_changepoints=self.model_config["number_of_individual_trend_changepoints"],
+                maximum_x_value= 1/self.model_config["test_train_split"],
+                delta_mu_prior=self.model_config["delta_mu_prior"],
+                delta_b_prior=self.model_config["delta_b_prior"],
+                m_sigma_prior=self.model_config["m_sigma_prior"],
+                k_sigma_prior=self.model_config["k_sigma_prior"],
                 model=self.model
             )
 
             seasonality_individual = pm.math.sum([
                 add_fourier_term(
                     x=x,
-                    number_of_fourier_components=config["number_of_individual_fourier_components"],
+                    number_of_fourier_components=self.model_config["number_of_individual_fourier_components"],
                     name=f'seasonality_individual_{round(seasonality_period_baseline,2)}',
                     dimension=number_of_time_series,
                     seasonality_period_baseline=seasonality_period_baseline,
-                    relative_uncertainty_factor_prior=config["relative_uncertainty_factor_prior"],
+                    relative_uncertainty_factor_prior=self.model_config["relative_uncertainty_factor_prior"],
                     model=self.model
                 ) for seasonality_period_baseline in seasonality_periods
                 ], axis = 0)
 
-            if config["number_of_shared_seasonality_groups"] > 0 :
+            if self.model_config["number_of_shared_seasonality_groups"] > 0 :
                 seasonality_shared = pm.math.sum([
                     add_fourier_term(
                         x=x,
-                        number_of_fourier_components=config["number_of_shared_fourier_components"],
+                        number_of_fourier_components=self.model_config["number_of_shared_fourier_components"],
                         name=f'seasonality_shared_{round(seasonality_period_baseline,2)}',
-                        dimension=config["number_of_shared_seasonality_groups"],
+                        dimension=self.model_config["number_of_shared_seasonality_groups"],
                         seasonality_period_baseline=seasonality_period_baseline,
-                        relative_uncertainty_factor_prior=config["relative_uncertainty_factor_prior"],
+                        relative_uncertainty_factor_prior=self.model_config["relative_uncertainty_factor_prior"],
                         model=self.model
                     ) for seasonality_period_baseline in seasonality_periods
                     ], axis = 0)
                             
                 all_models = pm.math.concatenate([x[:, None] * 0, seasonality_shared], axis=1)
-                model_probs = pm.Dirichlet('model_probs', a=np.ones(config["number_of_shared_seasonality_groups"]+1), shape=(number_of_time_series, config["number_of_shared_seasonality_groups"]+1))
+                model_probs = pm.Dirichlet('model_probs', a=np.ones(self.model_config["number_of_shared_seasonality_groups"]+1), shape=(number_of_time_series, self.model_config["number_of_shared_seasonality_groups"]+1))
                 chosen_model_index = pm.Categorical('chosen_model_index', p=model_probs, shape=number_of_time_series)
                 shared_seasonality_models = all_models[:, chosen_model_index]
             else:
@@ -133,8 +123,8 @@ class SorcererModel:
             
             precision_target = pm.Gamma(
             'precision_target_distribution',
-            alpha = config["precision_target_distribution_prior_alpha"],
-            beta = config["precision_target_distribution_prior_beta"],
+            alpha = self.model_config["precision_target_distribution_prior_alpha"],
+            beta = self.model_config["precision_target_distribution_prior_beta"],
             dims = 'number_of_time_series'
             )
 
@@ -146,13 +136,11 @@ class SorcererModel:
         seasonality_periods: np.array,
         progressbar: bool = True,
         random_seed: pm.util.RandomState = None,
-        method: str = "NUTS",
         **kwargs: Any,
     ) -> az.InferenceData:
         """
         Fits the model to the data using the specified sampler configuration.
         """
-        self.method = method
         (
             X,
             self.x_training_min,
@@ -161,7 +149,6 @@ class SorcererModel:
             self.y_training_min,
             self.y_training_max
             )  = normalize_training_data(training_data = training_data)
-        print("Normalized periods:", seasonality_periods*(X[1]-X[0]))
         self.build_model(
             X = X,
             y = y,
@@ -172,16 +159,16 @@ class SorcererModel:
         sampler_config["random_seed"] = random_seed
         sampler_config.update(**kwargs)
         with self.model:
-            if self.method == "MAP":
+            if self.sampler_config['sampler'] == "MAP":
                 self.map_estimate = [pm.find_MAP()]
             else:
-                if self.method == "NUTS":
+                if self.sampler_config['sampler'] == "NUTS":
                     sampler=pm.NUTS()
-                if self.method == "HMC":
+                if self.sampler_config['sampler'] == "HMC":
                     sampler=pm.HamiltonianMC()
-                if self.method == "metropolis":
+                if self.sampler_config['sampler'] == "metropolis":
                     sampler=pm.Metropolis()
-                idata_temp = pm.sample(step = sampler, **sampler_config)
+                idata_temp = pm.sample(step = sampler, **{k: v for k, v in sampler_config.items() if k != 'sampler'})
                 self.idata = self.set_idata_attrs(idata_temp)
 
     def set_idata_attrs(self, idata=None):
@@ -212,7 +199,7 @@ class SorcererModel:
         with self.model:
             x_test = (test_data['date'].astype('int64')//10**9 - self.x_training_min)/(self.x_training_max - self.x_training_min)
             pm.set_data({'input': x_test})
-            if self.method == "MAP":
+            if self.sampler_config['sampler'] == "MAP":
                 self.posterior_predictive = pm.sample_posterior_predictive(self.map_estimate, predictions=True, **kwargs)
             else:
                 self.posterior_predictive = pm.sample_posterior_predictive(self.idata, predictions=True, **kwargs)
@@ -303,7 +290,7 @@ class SorcererModel:
         
      
         if self.idata is not None and "posterior" in self.idata:
-            if self.method == "MAP":
+            if self.sampler_config['sampler'] == "MAP":
                 raise RuntimeError("The MAP method cannot be saved.")
             file = Path(str(fname))
             self.idata.to_netcdf(str(file))

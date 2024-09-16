@@ -23,7 +23,6 @@ df_time_series = df[time_series_columns]
 
 model_name = "SorcererModel"
 version = "v0.1"
-method = "MAP"
 seasonality_periods = np.array([52])
 forecast_horizon = 52
 
@@ -38,7 +37,8 @@ sampler_config = {
     "draws": 2000,
     "tune": 500,
     "chains": 4,
-    "cores": 1
+    "cores": 1,
+    "sampler": "MAP"
 }
 
 model_config = {
@@ -56,13 +56,14 @@ model_config = {
     "relative_uncertainty_factor_prior": 1000
 }
 
-if method == "MAP":
+if sampler_config["sampler"] == "MAP":
     model_config['precision_target_distribution_prior_alpha'] = 100
     model_config['precision_target_distribution_prior_beta'] = 0.05
 
 sorcerer = SorcererModel(
     model_config = model_config,
     model_name = model_name,
+    sampler_config = sampler_config,
     version = version
     )
 
@@ -71,11 +72,10 @@ sorcerer = SorcererModel(
 
 sorcerer.fit(
     training_data = training_data,
-    seasonality_periods = seasonality_periods,
-    method = method
+    seasonality_periods = seasonality_periods
     )
 
-if method != "MAP":
+if sampler_config["sampler"] != "MAP":
     fname = "examples/models/sorcer_model_v02.nc"
     sorcerer.save(fname)
 
