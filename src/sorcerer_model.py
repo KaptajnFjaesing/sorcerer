@@ -125,7 +125,7 @@ class SorcererModel:
             else:
                 shared_seasonality_models = 0
             
-            prediction = (
+            target_mean = (
                 linear_term +
                 seasonality_individual +
                 shared_seasonality_models
@@ -138,7 +138,7 @@ class SorcererModel:
             dims = 'number_of_time_series'
             )
 
-            pm.Normal('target_distribution', mu=prediction, sigma=1/pm.math.sqrt(precision_target), observed=y, dims=['number_of_input_observations', 'number_of_time_series'])
+            pm.Normal('target_distribution', mu=target_mean, sigma=1/pm.math.sqrt(precision_target), observed=y, dims=['number_of_input_observations', 'number_of_time_series'])
 
     def fit(
         self,
@@ -176,12 +176,12 @@ class SorcererModel:
                 self.map_estimate = [pm.find_MAP()]
             else:
                 if self.method == "NUTS":
-                    step=pm.NUTS()
+                    sampler=pm.NUTS()
                 if self.method == "HMC":
-                    step=pm.HamiltonianMC()
+                    sampler=pm.HamiltonianMC()
                 if self.method == "metropolis":
-                    step=pm.Metropolis()
-                idata_temp = pm.sample(step = step, **sampler_config)
+                    sampler=pm.Metropolis()
+                idata_temp = pm.sample(step = sampler, **sampler_config)
                 self.idata = self.set_idata_attrs(idata_temp)
 
     def set_idata_attrs(self, idata=None):
@@ -322,4 +322,3 @@ class SorcererModel:
             X = self.idata.constant_data.input,
             y = self.idata.constant_data.target
             )
-        

@@ -55,7 +55,7 @@ min_forecast_horizon = 26
 max_forecast_horizon = 52
 model_forecasts_sorcerer = []
 model_forecasts_exponential = []
-for forecast_horizon in range(min_forecast_horizon,52+1):
+for forecast_horizon in range(min_forecast_horizon,max_forecast_horizon+1):
     training_data = df_time_series.iloc[:-forecast_horizon]
     test_data = df_time_series.iloc[-forecast_horizon:]
     
@@ -63,20 +63,31 @@ for forecast_horizon in range(min_forecast_horizon,52+1):
     y_train_max = training_data[unnormalized_column_group].max()
     
     # Sorcerer
+    sampler_config = {
+        "draws": 500,
+        "tune": 100,
+        "chains": 1,
+        "cores": 1
+    }
+    
     model_config = {
         "test_train_split": len(training_data)/len(df_time_series),
         "number_of_individual_trend_changepoints": 10,
-        "number_of_individual_fourier_components": 5,
-        "number_of_shared_fourier_components": 3,
-        "number_of_shared_seasonality_groups": 10,
+        "number_of_individual_fourier_components": 10,
+        "number_of_shared_fourier_components": 7,
+        "number_of_shared_seasonality_groups": 4,
         "delta_mu_prior": 0,
         "delta_b_prior": 0.3,
-        "m_sigma_prior": 3,
-        "k_sigma_prior": 3,
-        "precision_target_distribution_prior_alpha": 100,
-        "precision_target_distribution_prior_beta": 0.05,
+        "m_sigma_prior": 5,
+        "k_sigma_prior": 5,
+        "precision_target_distribution_prior_alpha": 2,
+        "precision_target_distribution_prior_beta": 0.1,
         "relative_uncertainty_factor_prior": 1000
     }
+    
+    if method == "MAP":
+        model_config['precision_target_distribution_prior_alpha'] = 100
+        model_config['precision_target_distribution_prior_beta'] = 0.05
     
     sorcerer = SorcererModel(
         model_config = model_config,
@@ -108,36 +119,11 @@ for forecast_horizon in range(min_forecast_horizon,52+1):
 
 
 
-#%% Compare exponential smoothing to sorcerer
-import matplotlib.pyplot as plt
-
-iteration = -1
-horizon = forecast_horizon+iteration+1
-
-exp_forecast = model_forecasts_exponential[iteration]
-sorcerer_forecast = model_forecasts_sorcerer[iteration]
-n_cols = 2  # We want 2 columns
-n_rows = int(np.ceil((len(time_series_columns)-1) / n_cols))  # Number of rows needed
-
-fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(15, 5 * n_rows), constrained_layout=True)
-axs = axs.flatten()
-for i in range(len(unnormalized_column_group)):
-    ax = axs[i]  # Get the correct subplot
-    ax.plot(df_time_series['date'], df_time_series[unnormalized_column_group][unnormalized_column_group[i]], color = 'black',  label='Training Data')
-    ax.plot(df_time_series.iloc[-forecast_horizon:]['date'].iloc[-horizon:-horizon+min_forecast_horizon],exp_forecast[i][:min_forecast_horizon], color = 'tab:red', label='Exponential Smoothing Model')
-    ax.plot(df_time_series.iloc[-forecast_horizon:]['date'].iloc[-horizon:-horizon+min_forecast_horizon],sorcerer_forecast[i][:min_forecast_horizon], color = 'tab:blue', label='Sorcerer Model')
-    ax.set_xlabel('Date')
-    ax.set_ylabel('Values')
-    ax.grid(True)
-    ax.set_title(time_series_columns[i])
-    ax.legend()
-
-
-
 #%% Compute MASEs
-
+import matplotlib.pyplot as plt
 from src.utils import compute_residuals
-abs_mean_gradient_training_data = pd.read_pickle('./data/results/abs_mean_gradient_training_data.pkl')
+
+abs_mean_gradient_training_data = pd.read_pickle('./data/abs_mean_gradient_training_data.pkl')
 
 stacked_sorcerer = compute_residuals(
          model_forecasts = model_forecasts_sorcerer,
@@ -191,3 +177,28 @@ for j in range(i + 1, len(axs)):
 
 #%%
 stacked_sorcerer.to_pickle(r'C:\Users\roman\Documents\git\TimeSeriesForecastingReview\data\results\stacked_forecasts_sorcerer.pkl')
+
+
+#%% Compare exponential smoothing to sorcerer via residuals
+import matplotlib.pyplot as plt
+
+iteration = -1
+horizon = forecast_horizon+iteration+1
+
+exp_forecast = model_forecasts_exponential[iteration]
+sorcerer_forecast = model_forecasts_sorcerer[iteration]
+n_cols = 2  # We want 2 columns
+n_rows = int(np.ceil((len(time_series_columns)-1) / n_cols))  # Number of rows needed
+
+fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(15, 5 * n_rows), constrained_layout=True)
+axs = axs.flatten()
+for i in range(len(unnormalized_column_group)):
+    ax = axs[i]  # Get the correct subplot
+    ax.plot(df_time_series['date'], df_time_series[unnormalized_column_group][unnormalized_column_group[i]], color = 'black',  label='Training Data')
+    ax.plot(df_time_series.iloc[-forecast_horizon:]['date'].iloc[-horizon:-horizon+min_forecast_horizon],exp_forecast[i][:min_forecast_horizon], color = 'tab:red', label='Exponential Smoothing Model')
+    ax.plot(df_time_series.iloc[-forecast_horizon:]['date'].iloc[-horizon:-horizon+min_forecast_horizon],sorcerer_forecast[i][:min_forecast_horizon], color = 'tab:blue', label='Sorcerer Model')
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Values')
+    ax.grid(True)
+    ax.set_title(time_series_columns[i])
+    ax.legend()

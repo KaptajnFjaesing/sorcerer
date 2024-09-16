@@ -48,8 +48,7 @@ def get_default_sampler_config() -> Dict:
         "draws": 1000,
         "tune": 200,
         "chains": 1,
-        "cores": 1,
-        "target_accept": 0.9,
+        "cores": 1
     }
     return sampler_config
 
