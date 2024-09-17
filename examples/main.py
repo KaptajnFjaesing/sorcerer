@@ -24,7 +24,7 @@ df_time_series = df[time_series_columns]
 model_name = "SorcererModel"
 version = "v0.1"
 seasonality_periods = np.array([52])
-forecast_horizon = 52
+forecast_horizon = 29
 
 training_data = df_time_series.iloc[:-forecast_horizon]
 test_data = df_time_series.iloc[-forecast_horizon:]
@@ -44,21 +44,21 @@ sampler_config = {
 model_config = {
     "test_train_split": len(training_data)/len(df_time_series),
     "number_of_individual_trend_changepoints": 10,
-    "number_of_individual_fourier_components": 5,
-    "number_of_shared_fourier_components": 3,
+    "number_of_individual_fourier_components": 10,
+    "number_of_shared_fourier_components": 5,
     "number_of_shared_seasonality_groups": 1,
     "delta_mu_prior": 0,
-    "delta_b_prior": 0.3,
-    "m_sigma_prior": 3,
-    "k_sigma_prior": 3,
-    "precision_target_distribution_prior_alpha": 100,
-    "precision_target_distribution_prior_beta": 0.05,
+    "delta_b_prior": 0.2,
+    "m_sigma_prior": 1,
+    "k_sigma_prior": 1,
+    "precision_target_distribution_prior_alpha": 2,
+    "precision_target_distribution_prior_beta": 0.1,
     "relative_uncertainty_factor_prior": 1000
 }
 
 if sampler_config["sampler"] == "MAP":
-    model_config['precision_target_distribution_prior_alpha'] = 100
-    model_config['precision_target_distribution_prior_beta'] = 0.05
+    model_config['precision_target_distribution_prior_alpha'] = 50
+    model_config['precision_target_distribution_prior_beta'] = 0.01
 
 sorcerer = SorcererModel(
     model_config = model_config,

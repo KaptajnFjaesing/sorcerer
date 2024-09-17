@@ -70,28 +70,25 @@ for forecast_horizon in range(min_forecast_horizon,max_forecast_horizon+1):
         "sampler": "MAP"
     }
 
-    """
-     TO THIS POINT:
-          try: len(training_data)/len(df_time_series) or 0.8 again. Go back to what seemed to work and understand why it did.
-    
-    
-    """
-
     model_config = {
-        "test_train_split": 1,
+        "test_train_split": len(training_data)/len(df_time_series),
         "number_of_individual_trend_changepoints": 10,
-        "number_of_individual_fourier_components": 8,
-        "number_of_shared_fourier_components": 5,
-        "number_of_shared_seasonality_groups": 2,
+        "number_of_individual_fourier_components": 10,
+        "number_of_shared_fourier_components": 10,
+        "number_of_shared_seasonality_groups": 4,
         "delta_mu_prior": 0,
         "delta_b_prior": 0.2,
         "m_sigma_prior": 1,
         "k_sigma_prior": 1,
-        "precision_target_distribution_prior_alpha": 2,
-        "precision_target_distribution_prior_beta": 0.1,
+        "precision_target_distribution_prior_alpha": 100,
+        "precision_target_distribution_prior_beta": 0.01,
         "relative_uncertainty_factor_prior": 1000
     }
     
+    if sampler_config['sampler'] == "MAP":
+        model_config['precision_target_distribution_prior_alpha'] = 2
+        model_config['precision_target_distribution_prior_beta'] = 0.1
+        
     sorcerer = SorcererModel(
         model_config = model_config,
         model_name = model_name,
@@ -182,7 +179,7 @@ for j in range(i + 1, len(axs)):
 stacked_sorcerer.to_pickle(r'C:\Users\roman\Documents\git\TimeSeriesForecastingReview\data\results\stacked_forecasts_sorcerer.pkl')
 
 
-#%% Compare exponential smoothing to sorcerer via residuals
+#%% Compare exponential smoothing to sorcerer
 import matplotlib.pyplot as plt
 
 iteration = -25
@@ -197,7 +194,8 @@ fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(15, 5 * n_rows), co
 axs = axs.flatten()
 for i in range(len(unnormalized_column_group)):
     ax = axs[i]  # Get the correct subplot
-    ax.plot(df_time_series['date'], df_time_series[unnormalized_column_group][unnormalized_column_group[i]], color = 'black',  label='Training Data')
+    ax.plot(df_time_series['date'].iloc[:-horizon], df_time_series[unnormalized_column_group][unnormalized_column_group[i]].iloc[:-horizon], color = 'black',  label='Training Data')
+    ax.plot(df_time_series['date'].iloc[-horizon:], df_time_series[unnormalized_column_group][unnormalized_column_group[i]].iloc[-horizon:], color = 'gray',  label='Test Data')
     ax.plot(df_time_series.iloc[-forecast_horizon:]['date'].iloc[-horizon:-horizon+min_forecast_horizon],exp_forecast[i][:min_forecast_horizon], color = 'tab:red', label='Exponential Smoothing Model')
     ax.plot(df_time_series.iloc[-forecast_horizon:]['date'].iloc[-horizon:-horizon+min_forecast_horizon],sorcerer_forecast[i][:min_forecast_horizon], color = 'tab:blue', label='Sorcerer Model')
     ax.set_xlabel('Date')
