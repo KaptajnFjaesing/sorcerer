@@ -6,7 +6,7 @@ However, **Sorcerer** extends beyond what existing tools offer by focusing on tw
 
 1. **Version Control and Compatibility for Multivariate Models**: Sorcerer introduces a model version control approach inspired by PyMC's model builder, but adapted to work with the multivariate time series cases that PyMC's original class does not handle.
    
-2. **Automatic Learning of Periodicity**: Unlike existing models, which often require manually defined periodic components, Sorcerer learns the periodicity directly from the training data, providing a more flexible and data-driven approach to forecasting.
+2. **Novel Approach to Shared Seasonalities**: Sorcerer takes a novel approach to shared seasonalities, in which there is a user-specified set of shared seasonalities (no seasonality is one element of that set) that each time series can opt into. The shared seasonalities are learned from data, with only the number set by the user.  
 
 By combining these innovations, **Sorcerer** aims to offer a more comprehensive and scalable solution for time series forecasting, while retaining the interpretability and flexibility of a Bayesian framework.
 
@@ -28,34 +28,33 @@ df = normalized_weekly_store_category_household_sales()
 
 ## Define model
 ```python
-forecast_horizon = 40
 time_series_columns = [x for x in df.columns if ('HOUSEHOLD' in x and 'normalized' not in x) or ('date' in x)]
-
 df_time_series = df[time_series_columns]
-training_data = df_time_series.iloc[:-forecast_horizon]
-test_data = df_time_series.iloc[-forecast_horizon:]
-
 
 model_name = "SorcererModel"
 version = "v0.1"
-method = "NUTS"
+forecast_horizon = 45
 
+training_data = df_time_series.iloc[:-forecast_horizon]
+test_data = df_time_series.iloc[-forecast_horizon:]
+
+# Sorcerer
 sampler_config = {
     "draws": 2000,
     "tune": 500,
-    "chains": 4,
-    "cores": 1
+    "chains": 1,
+    "cores": 1,
+    "sampler": "NUTS"
 }
 
 model_config = {
-    "test_train_split": len(training_data)/len(df),
-    "number_of_individual_trend_changepoints": 20,
+    "test_train_split": len(training_data)/len(df_time_series),
+    "number_of_individual_trend_changepoints": 10,
     "number_of_individual_fourier_components": 10,
-    "number_of_shared_fourier_components": 5,
-    "period_threshold": 0.5,
-    "number_of_shared_seasonality_groups": 2,
+    "number_of_shared_fourier_components": 10,
+    "number_of_shared_seasonality_groups": 4,
     "delta_mu_prior": 0,
-    "delta_b_prior": 0.3,
+    "delta_b_prior": 0.2,
     "m_sigma_prior": 1,
     "k_sigma_prior": 1,
     "precision_target_distribution_prior_alpha": 2,
@@ -63,15 +62,14 @@ model_config = {
     "relative_uncertainty_factor_prior": 1000
 }
 
-if method == "MAP":
+if sampler_config['sampler'] == "MAP":
     model_config['precision_target_distribution_prior_alpha'] = 100
-    model_config['precision_target_distribution_prior_beta'] = 0.05
-    
+    model_config['precision_target_distribution_prior_beta'] = 0.01
 
 sorcerer = SorcererModel(
-    sampler_config = sampler_config,
     model_config = model_config,
     model_name = model_name,
+    sampler_config = sampler_config,
     version = version
     )
 ```
@@ -82,28 +80,20 @@ seasonality_periods = np.array([52])
 
 sorcerer.fit(
     training_data = training_data,
-    seasonality_periods = seasonality_periods,
-    method = method
+    seasonality_periods = seasonality_periods
     )
 
-if method != "MAP":
-    fname = "examples/models/sorcer_model_v02.nc"
-    sorcerer.save(fname)
 ```
 
 ```python
-Normalized periods: [0.30952381]
-Sequential sampling (4 chains in 1 job)
+Sequential sampling (1 chains in 1 job)
 CompoundStep
->NUTS: [linear_k, linear_delta, linear_m, fourier_coefficients_seasonality_individual_0.31, season_parameter_seasonality_individual_0.31, fourier_coefficients_seasonality_shared_0.31, season_parameter_seasonality_shared_0.31, model_probs, precision_target_distribution]
+>NUTS: [linear_k, linear_delta, linear_m, fourier_coefficients_seasonality_individual_0.32, season_parameter_seasonality_individual_0.32, fourier_coefficients_seasonality_shared_0.32, season_parameter_seasonality_shared_0.32, model_probs, precision_target_distribution]
 >CategoricalGibbsMetropolis: [chosen_model_index]
-Sampling chain 0, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:11:44
-Sampling chain 1, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:12:25
-Sampling chain 2, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:12:33
-Sampling chain 3, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:12:29
-Sampling 4 chains for 500 tune and 2_000 draw iterations (2_000 + 8_000 draws total) took 2953 seconds.
-The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
-The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details
+Sampling chain 0, 0 divergences ------------------------ 100% 0:00:00 / 0:23:22
+[?25hSampling 1 chain for 500 tune and 2_000 draw iterations (500 + 2_000 draws total) took 1402 seconds.
+Chain 0 reached the maximum tree depth. Increase `max_treedepth`, increase `target_accept` or reparameterize.
+Only one chain was sampled, this makes it impossible to run some convergence checks
 ```
 
 ## Produce forecasts
@@ -124,40 +114,29 @@ Sampling ... ━━━━━━━━━━━━━━━━━━━━━━�
         )
 
 hdi_values = az.hdi(model_preds)["target_distribution"].transpose("hdi", ...)
-
-# Calculate the number of rows needed for 2 columns
-n_cols = 2  # We want 2 columns
-n_rows = int(np.ceil((len(time_series_columns)-1) / n_cols))  # Number of rows needed
-
-# Create subplots with 2 columns and computed rows   
+n_cols = 2
+n_rows = int(np.ceil((len(time_series_columns)-1) / n_cols))
 fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(15, 5 * n_rows), constrained_layout=True)
-
-# Flatten the axs array to iterate over it easily
 axs = axs.flatten()
-
-# Loop through each column to plot
 for i in range(len(time_series_columns)-1):
-    ax = axs[i]  # Get the correct subplot
-    
+    ax = axs[i]  
     ax.plot(X_train, y_train[y_train.columns[i]], color = 'tab:red',  label='Training Data')
     ax.plot(X_test, y_test[y_test.columns[i]], color = 'black',  label='Test Data')
     ax.plot(preds_out_of_sample, (model_preds["target_distribution"].mean(("chain", "draw")).T)[i], color = 'tab:blue', label='Model')
     ax.fill_between(
         preds_out_of_sample.values,
-        hdi_values[0].values[:,i],  # lower bound of the HDI
-        hdi_values[1].values[:,i],  # upper bound of the HDI
-        color= 'blue',   # color of the shaded region
-        alpha=0.4,      # transparency level of the shaded region
+        hdi_values[0].values[:,i],
+        hdi_values[1].values[:,i], 
+        color= 'blue', 
+        alpha=0.4,    
     )
     ax.set_xlabel('Date')
     ax.set_ylabel('Values')
     ax.grid(True)
     ax.legend()
 
-# Hide any remaining empty subplots
 for j in range(i + 1, len(axs)):
-    fig.delaxes(axs[j])  # Remove unused axes to clean up the figure
-
+    fig.delaxes(axs[j]) 
 ```
 
 ![Forecasts](examples/figures/forecast.png)

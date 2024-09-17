@@ -34,19 +34,19 @@ y_train_max = training_data[unnormalized_column_group].max()
 
 # Sorcerer
 sampler_config = {
-    "draws": 2000,
-    "tune": 500,
-    "chains": 4,
+    "draws": 500,
+    "tune": 100,
+    "chains": 1,
     "cores": 1,
-    "sampler": "MAP"
+    "sampler": "NUTS"
 }
 
 model_config = {
     "test_train_split": len(training_data)/len(df_time_series),
     "number_of_individual_trend_changepoints": 10,
     "number_of_individual_fourier_components": 10,
-    "number_of_shared_fourier_components": 5,
-    "number_of_shared_seasonality_groups": 1,
+    "number_of_shared_fourier_components": 10,
+    "number_of_shared_seasonality_groups": 4,
     "delta_mu_prior": 0,
     "delta_b_prior": 0.2,
     "m_sigma_prior": 1,
@@ -56,8 +56,8 @@ model_config = {
     "relative_uncertainty_factor_prior": 1000
 }
 
-if sampler_config["sampler"] == "MAP":
-    model_config['precision_target_distribution_prior_alpha'] = 50
+if sampler_config['sampler'] == "MAP":
+    model_config['precision_target_distribution_prior_alpha'] = 100
     model_config['precision_target_distribution_prior_beta'] = 0.01
 
 sorcerer = SorcererModel(

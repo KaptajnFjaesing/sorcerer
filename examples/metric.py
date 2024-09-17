@@ -67,7 +67,7 @@ for forecast_horizon in range(min_forecast_horizon,max_forecast_horizon+1):
         "tune": 100,
         "chains": 1,
         "cores": 1,
-        "sampler": "MAP"
+        "sampler": "NUTS"
     }
 
     model_config = {
@@ -80,14 +80,14 @@ for forecast_horizon in range(min_forecast_horizon,max_forecast_horizon+1):
         "delta_b_prior": 0.2,
         "m_sigma_prior": 1,
         "k_sigma_prior": 1,
-        "precision_target_distribution_prior_alpha": 100,
-        "precision_target_distribution_prior_beta": 0.01,
+        "precision_target_distribution_prior_alpha": 2,
+        "precision_target_distribution_prior_beta": 0.1,
         "relative_uncertainty_factor_prior": 1000
     }
     
     if sampler_config['sampler'] == "MAP":
-        model_config['precision_target_distribution_prior_alpha'] = 2
-        model_config['precision_target_distribution_prior_beta'] = 0.1
+        model_config['precision_target_distribution_prior_alpha'] = 100
+        model_config['precision_target_distribution_prior_beta'] = 0.01
         
     sorcerer = SorcererModel(
         model_config = model_config,
