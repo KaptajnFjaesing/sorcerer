@@ -18,19 +18,23 @@ def get_default_model_config() -> Dict:
     - A dictionary containing the default model configuration.
     """
     model_config: Dict = {
-        "test_train_split": 0.8,
-        "number_of_individual_trend_changepoints": 10,
-        "number_of_individual_fourier_components": 5,
-        "number_of_shared_fourier_components": 5,
-        "number_of_shared_seasonality_groups": 2,
+        "number_of_individual_trend_changepoints": 3,
         "delta_mu_prior": 0,
         "delta_b_prior": 0.2,
-        "m_sigma_prior": 1,
-        "k_sigma_prior": 1,
+        "m_sigma_prior": 0.1,
+        "k_sigma_prior": 0.1,
+        "fourier_mu_prior": 0,
+        "fourier_sigma_prior" : 1,
         "precision_target_distribution_prior_alpha": 2,
-        "precision_target_distribution_prior_beta": 0.1,
-        "relative_uncertainty_factor_prior": 1000
+        "precision_target_distribution_prior_beta": 1,
+        "relative_uncertainty_factor_prior": 1000,
+        "probability_to_include_shared_seasonality_prior": 0.5,
+        "individual_fourier_terms": [],
+        "shared_fourier_terms": [] 
     }
+    
+
+    
     return model_config
 
 
@@ -49,7 +53,8 @@ def get_default_sampler_config() -> Dict:
         "tune": 200,
         "chains": 1,
         "cores": 1,
-        "sampler": "NUTS"
+        "sampler": "NUTS",
+        "nuts_sampler": "pymc"
     }
     return sampler_config
 

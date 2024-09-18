@@ -56,7 +56,7 @@ class SorcererModel:
         self.y_training_min = None
         self.y_training_max = None
         
-    def build_model(self, X, y, seasonality_periods, **kwargs):
+    def build_model(self, X, y):
         """
         Builds the PyMC model based on the input data and configuration.
         """
@@ -75,50 +75,61 @@ class SorcererModel:
                 trend_name='linear',
                 number_of_time_series=number_of_time_series,
                 number_of_trend_changepoints=self.model_config["number_of_individual_trend_changepoints"],
-                maximum_x_value= 1/self.model_config["test_train_split"],
                 delta_mu_prior=self.model_config["delta_mu_prior"],
                 delta_b_prior=self.model_config["delta_b_prior"],
                 m_sigma_prior=self.model_config["m_sigma_prior"],
                 k_sigma_prior=self.model_config["k_sigma_prior"],
                 model=self.model
             )
-
-            seasonality_individual = pm.math.sum([
-                add_fourier_term(
-                    x=x,
-                    number_of_fourier_components=self.model_config["number_of_individual_fourier_components"],
-                    name=f'seasonality_individual_{round(seasonality_period_baseline,2)}',
-                    dimension=number_of_time_series,
-                    seasonality_period_baseline=seasonality_period_baseline,
-                    relative_uncertainty_factor_prior=self.model_config["relative_uncertainty_factor_prior"],
-                    model=self.model
-                ) for seasonality_period_baseline in seasonality_periods
-                ], axis = 0)
-
-            if self.model_config["number_of_shared_seasonality_groups"] > 0 :
-                seasonality_shared = pm.math.sum([
+            
+            if len(self.model_config["individual_fourier_terms"]) > 0:
+                seasonality_individual = pm.math.sum([
                     add_fourier_term(
                         x=x,
-                        number_of_fourier_components=self.model_config["number_of_shared_fourier_components"],
-                        name=f'seasonality_shared_{round(seasonality_period_baseline,2)}',
-                        dimension=self.model_config["number_of_shared_seasonality_groups"],
-                        seasonality_period_baseline=seasonality_period_baseline,
+                        number_of_fourier_components= term['number_of_fourier_components'],
+                        name=f"seasonality_individual_{round(term['seasonality_period_baseline'],2)}",
+                        dimension=number_of_time_series,
+                        seasonality_period_baseline=term['seasonality_period_baseline']*(X[1]-X[0]),
                         relative_uncertainty_factor_prior=self.model_config["relative_uncertainty_factor_prior"],
-                        model=self.model
-                    ) for seasonality_period_baseline in seasonality_periods
+                        model=self.model,
+                        fourier_sigma_prior = self.model_config["fourier_sigma_prior"],
+                        fourier_mu_prior = self.model_config["fourier_mu_prior"]
+                    ) for term in self.model_config["individual_fourier_terms"]
                     ], axis = 0)
-                            
-                all_models = pm.math.concatenate([x[:, None] * 0, seasonality_shared], axis=1)
-                model_probs = pm.Dirichlet('model_probs', a=np.ones(self.model_config["number_of_shared_seasonality_groups"]+1), shape=(number_of_time_series, self.model_config["number_of_shared_seasonality_groups"]+1))
-                chosen_model_index = pm.Categorical('chosen_model_index', p=model_probs, shape=number_of_time_series)
-                shared_seasonality_models = all_models[:, chosen_model_index]
             else:
-                shared_seasonality_models = 0
+                print("No individual seasonalities included. If desired, specifications must be added to the model_config.")
+
+            if len(self.model_config["shared_fourier_terms"]) > 0:
+                # Calculate seasonality terms
+                shared_seasonalities = pm.math.concatenate([
+                    add_fourier_term(
+                        x=x,
+                        number_of_fourier_components=term['number_of_fourier_components'],
+                        name=f"seasonality_shared_{round(term['seasonality_period_baseline'], 2)}",
+                        dimension=1,
+                        seasonality_period_baseline=term['seasonality_period_baseline'] * (X[1] - X[0]),
+                        relative_uncertainty_factor_prior=self.model_config["relative_uncertainty_factor_prior"],
+                        model=self.model,
+                        fourier_sigma_prior=self.model_config["fourier_sigma_prior"],
+                        fourier_mu_prior=self.model_config["fourier_mu_prior"]
+                    ) for term in self.model_config["shared_fourier_terms"]
+                ], axis=1)  # Stack seasonality components along a new axis
+                # Define a binary selection variable for each time series and seasonality term
+                include_seasonality = pm.Bernoulli(
+                    'include_seasonality',
+                    p=self.model_config["probability_to_include_shared_seasonality_prior"],  # Prior probability to include/exclude a seasonality term
+                    shape=(len(self.model_config["shared_fourier_terms"]), number_of_time_series)
+                )
+                # Multiply the seasonality terms by the binary inclusion variable
+                shared_seasonality = pm.math.dot(shared_seasonalities, include_seasonality)
+            else:
+                print("No shared seasonalities included. If desired, specifications must be added to the model_config.")
+                shared_seasonality = 0
             
             target_mean = (
                 linear_term +
                 seasonality_individual +
-                shared_seasonality_models
+                shared_seasonality
             )
             
             precision_target = pm.Gamma(
@@ -133,7 +144,6 @@ class SorcererModel:
     def fit(
         self,
         training_data: pd.DataFrame,
-        seasonality_periods: np.array,
         progressbar: bool = True,
         random_seed: pm.util.RandomState = None,
         **kwargs: Any,
@@ -149,11 +159,7 @@ class SorcererModel:
             self.y_training_min,
             self.y_training_max
             )  = normalize_training_data(training_data = training_data)
-        self.build_model(
-            X = X,
-            y = y,
-            seasonality_periods = seasonality_periods*(X[1]-X[0])
-            )
+        self.build_model(X = X,y = y)
         sampler_config = self.sampler_config.copy()
         sampler_config["progressbar"] = progressbar
         sampler_config["random_seed"] = random_seed
