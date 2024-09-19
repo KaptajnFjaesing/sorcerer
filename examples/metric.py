@@ -21,7 +21,8 @@ unnormalized_column_group = [x for x in df.columns if 'HOUSEHOLD' in x and 'norm
 df_time_series = df[time_series_columns]
 
 model_name = "SorcererModel"
-version = "v0.2"
+version = "v0.3"
+number_of_weeks_in_a_year = 52.1429
 
 # Sorcerer
 sampler_config = {
@@ -33,23 +34,24 @@ sampler_config = {
 }
 
 model_config = {
-    "number_of_individual_trend_changepoints": 4,
+    "number_of_individual_trend_changepoints": 10,
     "delta_mu_prior": 0,
-    "delta_b_prior": 0.2,
-    "m_sigma_prior": 0.5,
-    "k_sigma_prior": 0.5,
+    "delta_b_prior": 0.1,
+    "m_sigma_prior": 0.2,
+    "k_sigma_prior": 0.2,
     "fourier_mu_prior": 0,
     "fourier_sigma_prior" : 1,
     "precision_target_distribution_prior_alpha": 2,
     "precision_target_distribution_prior_beta": 0.1,
-    "relative_uncertainty_factor_prior": 1000,
-    "probability_to_include_shared_seasonality_prior": 0.5,
+    "prior_probability_shared_seasonality_alpha": 1,
+    "prior_probability_shared_seasonality_beta": 1,
     "individual_fourier_terms": [
         {'seasonality_period_baseline': 52,'number_of_fourier_components': 10}
     ],
     "shared_fourier_terms": [
-        {'seasonality_period_baseline': 52,'number_of_fourier_components': 5},
-        {'seasonality_period_baseline': 4,'number_of_fourier_components': 1}
+        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 5},
+        {'seasonality_period_baseline': number_of_weeks_in_a_year/4,'number_of_fourier_components': 3},
+        {'seasonality_period_baseline': number_of_weeks_in_a_year/12,'number_of_fourier_components': 3},
     ]
 }
 
@@ -84,7 +86,7 @@ def exponential_smoothing(
 
 
 min_forecast_horizon = 26
-max_forecast_horizon = 100
+max_forecast_horizon = 52
 model_forecasts_sorcerer = []
 model_forecasts_exponential = []
 for forecast_horizon in range(min_forecast_horizon,max_forecast_horizon+1):
