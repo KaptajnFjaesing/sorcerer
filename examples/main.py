@@ -9,35 +9,37 @@ import numpy as np
 import matplotlib.pyplot as plt
 import arviz as az
 
-from examples.load_data import normalized_weekly_store_category_household_sales
 from src.sorcerer_model import SorcererModel
+from examples.load_data import normalized_weekly_store_category_household_sales
 
 df = normalized_weekly_store_category_household_sales()
-
-# %% Define model
 
 time_series_columns = [x for x in df.columns if ('HOUSEHOLD' in x and 'normalized' not in x) or ('date' in x)]
 
 df_time_series = df[time_series_columns]
 
+
+# %%
 model_name = "SorcererModel"
-version = "v0.2"
-forecast_horizon = 70
+version = "v0.3"
+forecast_horizon = 50
 
 training_data = df_time_series.iloc[:-forecast_horizon]
 test_data = df_time_series.iloc[-forecast_horizon:]
 
 # Sorcerer
 sampler_config = {
-    "draws": 200,
+    "draws": 500,
     "tune": 100,
-    "chains": 1,
+    "chains": 4,
     "cores": 1,
     "sampler": "NUTS"
 }
 
+number_of_weeks_in_a_year = 52.1429
+
 model_config = {
-    "number_of_individual_trend_changepoints": 4,
+    "number_of_individual_trend_changepoints": 10,
     "delta_mu_prior": 0,
     "delta_b_prior": 0.1,
     "m_sigma_prior": 0.2,
@@ -45,15 +47,16 @@ model_config = {
     "fourier_mu_prior": 0,
     "fourier_sigma_prior" : 1,
     "precision_target_distribution_prior_alpha": 2,
-    "precision_target_distribution_prior_beta": 1,
-    "relative_uncertainty_factor_prior": 1000,
-    "probability_to_include_shared_seasonality_prior": 0.5,
+    "precision_target_distribution_prior_beta": 0.1,
+    "prior_probability_shared_seasonality_alpha": 1,
+    "prior_probability_shared_seasonality_beta": 1,
     "individual_fourier_terms": [
-        {'seasonality_period_baseline': 52,'number_of_fourier_components': 5}
+        {'seasonality_period_baseline': 52,'number_of_fourier_components': 10}
     ],
     "shared_fourier_terms": [
-        {'seasonality_period_baseline': 52,'number_of_fourier_components': 5},
-        {'seasonality_period_baseline': 4,'number_of_fourier_components': 1}
+        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 5},
+        {'seasonality_period_baseline': number_of_weeks_in_a_year/4,'number_of_fourier_components': 3},
+        {'seasonality_period_baseline': number_of_weeks_in_a_year/12,'number_of_fourier_components': 3},
     ]
 }
 
@@ -135,7 +138,23 @@ for j in range(i + 1, len(axs)):
 # %%
 idata = sorcerer.get_idata()
 print(dir(idata.posterior))
-# %%
+print()
+print(idata.posterior.dims)
+
+# %% Test if the periods used are similar to the prescribed ones
+import pymc as pm
+
+pm.plot_trace(idata, var_names = [x for x in dir(idata.posterior) if 'fourier_coefficients_seasonality' in x and 'dim' not in x])
+pm.plot_trace(idata, var_names = [x for x in dir(idata.posterior) if 'linear' in x and 'dim' not in x])
+pm.plot_trace(idata, var_names = ['prior_probability_shared_seasonality','precision_target_distribution'])
+
+
+# %% Plot trend, seasonality ect
+
+
+import pandas as pd
+
+x_total = pd.concat([X_train,X_test])
 
 
 s = np.linspace(0, 1, model_config['number_of_individual_trend_changepoints'] + 2)[1:-1] # max(x) for input is by definition 1
@@ -147,22 +166,24 @@ linear_delta = idata.posterior['linear_delta'].mean(('chain','draw')).values
 
 trend = (linear_k + np.dot(A, linear_delta.T)) * X_train.values[:, None] + linear_m + np.dot(A, (-s * linear_delta).T)
 
+A2 = (x_total.values[:, None] > s) * 1.
+trend2 = (linear_k + np.dot(A2, linear_delta.T)) * x_total.values[:, None] + linear_m + np.dot(A2, (-s * linear_delta).T)
 
 plt.figure()
-plt.plot(np.dot(A, linear_delta.T))
-
-plt.figure()
+plt.title("Trends")
 for i in range(len(column_names)):
     plt.plot(trend[:,i], label = column_names[i])
 plt.legend()
 
 
-season_parameter_seasonality_individual_52 = idata.posterior['season_parameter_seasonality_individual_52'].mean(('chain','draw')).values
-fourier_coefficients_seasonality_individual_52 = idata.posterior['fourier_coefficients_seasonality_individual_52'].mean(('chain','draw')).values
-frequency_component = 2 * np.pi * (np.arange(model_config['individual_fourier_terms'][0]['number_of_fourier_components']) + 1) * X_train.values[:, None]
-t = frequency_component[:, :, None] / season_parameter_seasonality_individual_52  # Normalize by the period
-fourier_features = np.concatenate((np.cos(t), np.sin(t)), axis=1)
-individual_seasonality_52 = np.sum(fourier_features * fourier_coefficients_seasonality_individual_52[None, :, :] , axis =1)
+for y in :
+    
+    season_parameter_seasonality_individual_52 = idata.posterior[y].mean(('chain','draw')).values
+    fourier_coefficients_seasonality_individual_52 = idata.posterior[''].mean(('chain','draw')).values
+    frequency_component = 2 * np.pi * (np.arange(model_config['individual_fourier_terms'][0]['number_of_fourier_components']) + 1) * X_train.values[:, None]
+    t = frequency_component[:, :, None] / season_parameter_seasonality_individual_52  # Normalize by the period
+    fourier_features = np.concatenate((np.cos(t), np.sin(t)), axis=1)
+    individual_seasonality_52 = np.sum(fourier_features * fourier_coefficients_seasonality_individual_52[None, :, :] , axis =1)
 
 season_parameter_seasonality_shared_52 = idata.posterior['season_parameter_seasonality_shared_52'].mean(('chain','draw')).values
 fourier_coefficients_seasonality_shared_52 = idata.posterior['fourier_coefficients_seasonality_shared_52'].mean(('chain','draw')).values
@@ -171,10 +192,21 @@ t = frequency_component[:, :, None] / season_parameter_seasonality_shared_52  # 
 fourier_features = np.concatenate((np.cos(t), np.sin(t)), axis=1)
 shared_seasonality_52 =np.sum(fourier_features * fourier_coefficients_seasonality_shared_52[None, :, :] , axis =1)
 
-plt.figure()
-plt.plot(shared_seasonality_52[:,0])
+season_parameter_seasonality_shared_13 = idata.posterior['season_parameter_seasonality_shared_13'].mean(('chain','draw')).values
+fourier_coefficients_seasonality_shared_13 = idata.posterior['fourier_coefficients_seasonality_shared_13'].mean(('chain','draw')).values
+frequency_component = 2 * np.pi * (np.arange(model_config['shared_fourier_terms'][1]['number_of_fourier_components']) + 1) * X_train.values[:, None]
+t = frequency_component[:, :, None] / season_parameter_seasonality_shared_13  # Normalize by the period
+fourier_features = np.concatenate((np.cos(t), np.sin(t)), axis=1)
+shared_seasonality_13 =np.sum(fourier_features * fourier_coefficients_seasonality_shared_13[None, :, :] , axis =1)
+
 
 plt.figure()
+plt.title("Shared seasonality period 52")
+plt.plot(shared_seasonality_52[:,0][np.argmin(shared_seasonality_52[:,0]):np.argmin(shared_seasonality_52[:,0])+52])
+plt.plot(shared_seasonality_13[:,0][np.argmin(shared_seasonality_13[:,0]):np.argmin(shared_seasonality_13[:,0])+13], 'o-')
+
+plt.figure()
+plt.title("Individual seasonalities")
 for i in range(len(column_names)):
     plt.plot(individual_seasonality_52[:,i], label = column_names[i])
 plt.legend()

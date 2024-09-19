@@ -27,8 +27,8 @@ def get_default_model_config() -> Dict:
         "fourier_sigma_prior" : 1,
         "precision_target_distribution_prior_alpha": 2,
         "precision_target_distribution_prior_beta": 1,
-        "relative_uncertainty_factor_prior": 1000,
-        "probability_to_include_shared_seasonality_prior": 0.5,
+        "prior_probability_shared_seasonality_alpha": 1,
+        "prior_probability_shared_seasonality_beta": 1,
         "individual_fourier_terms": [],
         "shared_fourier_terms": [] 
     }

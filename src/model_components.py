@@ -22,7 +22,7 @@ def add_linear_term(
     delta_b_prior: float,
     m_sigma_prior: float,
     k_sigma_prior: float
-) -> pm.Deterministic:
+):
     """
     Adds a linear term to the model with change points for the trend.
 
@@ -58,27 +58,28 @@ def add_fourier_term(
     name: str,
     dimension: int,
     seasonality_period_baseline: float,
-    relative_uncertainty_factor_prior: float,
     fourier_sigma_prior: float,
     fourier_mu_prior: float
-) -> pm.Deterministic:
+):
     """
-    Adds a Fourier term to the model to capture seasonality.
-
-    Parameters:
-    - model: The PyMC model context.
-    - x: numpy array of the input time points.
-    - number_of_fourier_components: int, number of Fourier components to use.
-    - name: str, the name of the Fourier component.
-    - dimension: int, dimension of the component (number of time series or groups).
-    - seasonality_period_baseline: float, baseline period for seasonality.
-    - relative_uncertainty_factor_prior: float, prior factor for seasonality uncertainty.
-
-    Returns:
-    - A PyMC Deterministic variable representing the Fourier term for seasonality.
+    In order to not depend on perfect specification of the periodicity, I have
+    tried with the priors below, however, this introduces an increased rate of
+    converges issues and divergences.
+    
+    seasonality_period = pm.Gamma(
+        f'season_parameter_{name}',
+        alpha=relative_uncertainty_factor_prior * seasonality_period_baseline,
+        beta=relative_uncertainty_factor_prior
+        )
+    or
+    
+    seasonality_period = pm.Lognormal(
+        f'seasonality_period_{name}',
+        mu=np.log(seasonality_period_baseline),
+        sigma=relative_uncertainty_factor_prior
+        )
     """
     with model:
         fourier_coefficients = pm.Normal(f'fourier_coefficients_{name}', mu=fourier_mu_prior, sigma = fourier_sigma_prior, shape=(2 * number_of_fourier_components, dimension))
-        seasonality_period = pm.Gamma(f'season_parameter_{name}', alpha=relative_uncertainty_factor_prior * seasonality_period_baseline, beta=relative_uncertainty_factor_prior)
-        fourier_features = create_fourier_features(x=x, number_of_fourier_components=number_of_fourier_components, seasonality_period=seasonality_period)
+        fourier_features = create_fourier_features(x=x, number_of_fourier_components=number_of_fourier_components, seasonality_period=seasonality_period_baseline)
     return pm.math.sum(fourier_features * fourier_coefficients[None, :, :], axis=1)

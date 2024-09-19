@@ -90,7 +90,6 @@ class SorcererModel:
                         name=f"seasonality_individual_{round(term['seasonality_period_baseline'],2)}",
                         dimension=number_of_time_series,
                         seasonality_period_baseline=term['seasonality_period_baseline']*(X[1]-X[0]),
-                        relative_uncertainty_factor_prior=self.model_config["relative_uncertainty_factor_prior"],
                         model=self.model,
                         fourier_sigma_prior = self.model_config["fourier_sigma_prior"],
                         fourier_mu_prior = self.model_config["fourier_mu_prior"]
@@ -108,16 +107,21 @@ class SorcererModel:
                         name=f"seasonality_shared_{round(term['seasonality_period_baseline'], 2)}",
                         dimension=1,
                         seasonality_period_baseline=term['seasonality_period_baseline'] * (X[1] - X[0]),
-                        relative_uncertainty_factor_prior=self.model_config["relative_uncertainty_factor_prior"],
                         model=self.model,
                         fourier_sigma_prior=self.model_config["fourier_sigma_prior"],
                         fourier_mu_prior=self.model_config["fourier_mu_prior"]
                     ) for term in self.model_config["shared_fourier_terms"]
                 ], axis=1)  # Stack seasonality components along a new axis
-                # Define a binary selection variable for each time series and seasonality term
+                
+                prior_probability_shared_seasonality = pm.Beta(
+                    'prior_probability_shared_seasonality',
+                    alpha=self.model_config["prior_probability_shared_seasonality_alpha"],
+                    beta=self.model_config["prior_probability_shared_seasonality_beta"],
+                    shape = number_of_time_series
+                    )
                 include_seasonality = pm.Bernoulli(
                     'include_seasonality',
-                    p=self.model_config["probability_to_include_shared_seasonality_prior"],  # Prior probability to include/exclude a seasonality term
+                    p=prior_probability_shared_seasonality,  # Prior probability to include/exclude a seasonality term
                     shape=(len(self.model_config["shared_fourier_terms"]), number_of_time_series)
                 )
                 # Multiply the seasonality terms by the binary inclusion variable
