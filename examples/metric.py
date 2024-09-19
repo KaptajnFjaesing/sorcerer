@@ -21,7 +21,7 @@ unnormalized_column_group = [x for x in df.columns if 'HOUSEHOLD' in x and 'norm
 df_time_series = df[time_series_columns]
 
 model_name = "SorcererModel"
-version = "v0.1"
+version = "v0.2"
 
 # Sorcerer
 sampler_config = {
@@ -29,7 +29,7 @@ sampler_config = {
     "tune": 100,
     "chains": 1,
     "cores": 1,
-    "sampler": "NUTS"
+    "sampler": "MAP"
 }
 
 model_config = {
@@ -54,7 +54,7 @@ model_config = {
 }
 
 if sampler_config['sampler'] == "MAP":
-    model_config['precision_target_distribution_prior_alpha'] = 100
+    model_config['precision_target_distribution_prior_alpha'] = 1000
     model_config['precision_target_distribution_prior_beta'] = 0.01
 
 
@@ -84,7 +84,7 @@ def exponential_smoothing(
 
 
 min_forecast_horizon = 26
-max_forecast_horizon = 52
+max_forecast_horizon = 100
 model_forecasts_sorcerer = []
 model_forecasts_exponential = []
 for forecast_horizon in range(min_forecast_horizon,max_forecast_horizon+1):
@@ -181,7 +181,7 @@ for j in range(i + 1, len(axs)):
 
 
 #%%
-stacked_sorcerer.to_pickle(r'C:\Users\roman\Documents\git\TimeSeriesForecastingReview\data\results\stacked_forecasts_sorcerer.pkl')
+stacked_sorcerer.to_pickle(r'..\TimeSeriesForecastingReview\data\results\stacked_forecasts_sorcerer_MAP.pkl')
 
 
 #%% Compare exponential smoothing to sorcerer
