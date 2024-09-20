@@ -27,10 +27,11 @@ number_of_weeks_in_a_year = 52.1429
 # Sorcerer
 sampler_config = {
     "draws": 500,
-    "tune": 100,
+    "tune": 200,
     "chains": 1,
     "cores": 1,
-    "sampler": "MAP"
+    "sampler": "NUTS",
+    "discard_tuned_samples": True
 }
 
 model_config = {
@@ -46,7 +47,7 @@ model_config = {
     "prior_probability_shared_seasonality_alpha": 1,
     "prior_probability_shared_seasonality_beta": 1,
     "individual_fourier_terms": [
-        {'seasonality_period_baseline': 52,'number_of_fourier_components': 10}
+        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 10}
     ],
     "shared_fourier_terms": [
         {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 5},
@@ -183,7 +184,7 @@ for j in range(i + 1, len(axs)):
 
 
 #%%
-stacked_sorcerer.to_pickle(r'..\TimeSeriesForecastingReview\data\results\stacked_forecasts_sorcerer_MAP.pkl')
+stacked_sorcerer.to_pickle(r'..\TimeSeriesForecastingReview\data\results\stacked_forecasts_sorcerer_NUTS_new_data_split.pkl')
 
 
 #%% Compare exponential smoothing to sorcerer

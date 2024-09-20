@@ -17,7 +17,6 @@ from typing import (
     Any
     )
 
-# Import from other modules
 from src.config import (
     get_default_model_config,
     get_default_sampler_config,
@@ -143,7 +142,7 @@ class SorcererModel:
             dims = 'number_of_time_series'
             )
 
-            pm.Normal('target_distribution', mu=target_mean, sigma=1/pm.math.sqrt(precision_target), observed=y, dims=['number_of_input_observations', 'number_of_time_series'])
+            pm.Normal('target_distribution', mu=target_mean, sigma=1/precision_target, observed=y, dims=['number_of_input_observations', 'number_of_time_series'])
 
     def fit(
         self,

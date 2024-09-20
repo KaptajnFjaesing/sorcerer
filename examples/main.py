@@ -31,7 +31,7 @@ test_data = df_time_series.iloc[-forecast_horizon:]
 sampler_config = {
     "draws": 500,
     "tune": 100,
-    "chains": 4,
+    "chains": 1,
     "cores": 1,
     "sampler": "NUTS"
 }
@@ -51,7 +51,7 @@ model_config = {
     "prior_probability_shared_seasonality_alpha": 1,
     "prior_probability_shared_seasonality_beta": 1,
     "individual_fourier_terms": [
-        {'seasonality_period_baseline': 52,'number_of_fourier_components': 10}
+        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 10}
     ],
     "shared_fourier_terms": [
         {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 5},
