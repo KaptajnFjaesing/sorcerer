@@ -1070,7 +1070,10 @@ files = [
 ]
 
 [package.dependencies]
-numpy = {version = ">=1.23.2", markers = "python_version == \"3.11\""}
+numpy = [
+    {version = ">=1.23.2", markers = "python_version == \"3.11\""},
+    {version = ">=1.26.0", markers = "python_version >= \"3.12\""},
+]
 python-dateutil = ">=2.8.2"
 pytz = ">=2020.1"
 tzdata = ">=2022.7"
@@ -1874,5 +1877,5 @@ test = ["hypothesis", "packaging", "pytest", "pytest-cov"]
 
 [metadata]
 lock-version = "2.0"
-python-versions = "3.11.8"
-content-hash = "71e829013095deef4afa9cabc3bb242660edd966f37c4b1f5144b4274ea23e5b"
+python-versions = ">=3.11.8,<3.13"
+content-hash = "20718ff99737a5b66c94045e6da210957238195ead6b3d5188532336554b7aa5"
