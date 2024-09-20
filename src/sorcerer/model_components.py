@@ -7,7 +7,7 @@ Created on Tue Sep 10 19:26:17 2024
 import numpy as np
 import pymc as pm
 import pytensor as pt
-from sorcerer.src.utils import create_fourier_features
+from sorcerer.utils import create_fourier_features
 
 
 def add_linear_term(

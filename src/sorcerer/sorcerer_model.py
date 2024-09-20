@@ -17,16 +17,16 @@ from typing import (
     Any
     )
 
-from sorcerer.src.config import (
+from sorcerer.config import (
     get_default_model_config,
     get_default_sampler_config,
     serialize_model_config,
 )
-from sorcerer.src.model_components import (
+from sorcerer.model_components import (
     add_linear_term,
     add_fourier_term
 )
-from sorcerer.src.utils import (
+from sorcerer.utils import (
     generate_hash_id,
     normalize_training_data
     )
