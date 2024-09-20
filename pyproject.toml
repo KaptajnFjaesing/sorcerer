@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "sorcerer-model"
+name = "sorcerer"
 version = "0.3.0"
 description = "A Bayesian hierarchical model for time series forecasting"
 authors = ["Jonas Petersen"]
