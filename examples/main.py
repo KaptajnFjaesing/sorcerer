@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import arviz as az
 
-from src.sorcerer_model import SorcererModel
+from src.sorcerer.sorcerer_model import SorcererModel
 from examples.load_data import normalized_weekly_store_category_household_sales
 
 df = normalized_weekly_store_category_household_sales()
@@ -33,7 +33,8 @@ sampler_config = {
     "tune": 100,
     "chains": 1,
     "cores": 1,
-    "sampler": "NUTS"
+    "sampler": "NUTS",
+    "progressbar": False
 }
 
 number_of_weeks_in_a_year = 52.1429

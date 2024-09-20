@@ -147,8 +147,6 @@ class SorcererModel:
     def fit(
         self,
         training_data: pd.DataFrame,
-        progressbar: bool = True,
-        random_seed: pm.util.RandomState = None,
         **kwargs: Any,
     ) -> az.InferenceData:
         """
@@ -164,8 +162,6 @@ class SorcererModel:
             )  = normalize_training_data(training_data = training_data)
         self.build_model(X = X,y = y)
         sampler_config = self.sampler_config.copy()
-        sampler_config["progressbar"] = progressbar
-        sampler_config["random_seed"] = random_seed
         sampler_config.update(**kwargs)
         with self.model:
             if self.sampler_config['sampler'] == "MAP":
