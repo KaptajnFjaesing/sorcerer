@@ -16,6 +16,7 @@ from typing import (
     Union,
     Any
     )
+import logging
 
 from sorcerer.config import (
     get_default_model_config,
@@ -39,13 +40,12 @@ class SorcererModel:
         model_config: dict | None = None,
         sampler_config: dict | None = None,
         model_name: str = "SorcererModel",
-        version: str = None
+        version: str = None,
     ):
-        # Initialize configurations
         self.sampler_config = (get_default_sampler_config() if sampler_config is None else sampler_config)
         self.model_config = (get_default_model_config() if model_config is None else model_config)
-        self.model = None  # Set by build_model
-        self.idata: az.InferenceData | None = None  # idata is generated during fitting
+        self.model = None
+        self.idata: az.InferenceData | None = None
         self.posterior_predictive: az.InferenceData
         self.model_name = model_name
         self.version = version
@@ -54,11 +54,9 @@ class SorcererModel:
         self.x_training_max = None
         self.y_training_min = None
         self.y_training_max = None
+        self.logger = logging.getLogger("pymc")
         
     def build_model(self, X, y):
-        """
-        Builds the PyMC model based on the input data and configuration.
-        """
         number_of_time_series = y.shape[1]
         baseline_slope = (y.values[-1] - y.values[0]) / (X.values[-1] - X.values[0])
         baseline_bias = y.values[0]
@@ -95,10 +93,9 @@ class SorcererModel:
                     ) for term in self.model_config["individual_fourier_terms"]
                     ], axis = 0)
             else:
-                print("No individual seasonalities included. If desired, specifications must be added to the model_config.")
+                self.warning.info("No individual seasonalities included. If desired, specifications must be added to the model_config.")
 
             if len(self.model_config["shared_fourier_terms"]) > 0:
-                # Calculate seasonality terms
                 shared_seasonalities = pm.math.concatenate([
                     add_fourier_term(
                         x=x,
@@ -110,7 +107,7 @@ class SorcererModel:
                         fourier_sigma_prior=self.model_config["fourier_sigma_prior"],
                         fourier_mu_prior=self.model_config["fourier_mu_prior"]
                     ) for term in self.model_config["shared_fourier_terms"]
-                ], axis=1)  # Stack seasonality components along a new axis
+                ], axis=1)
                 
                 prior_probability_shared_seasonality = pm.Beta(
                     'prior_probability_shared_seasonality',
@@ -120,13 +117,12 @@ class SorcererModel:
                     )
                 include_seasonality = pm.Bernoulli(
                     'include_seasonality',
-                    p=prior_probability_shared_seasonality,  # Prior probability to include/exclude a seasonality term
+                    p=prior_probability_shared_seasonality,
                     shape=(len(self.model_config["shared_fourier_terms"]), number_of_time_series)
                 )
-                # Multiply the seasonality terms by the binary inclusion variable
                 shared_seasonality = pm.math.dot(shared_seasonalities, include_seasonality)
             else:
-                print("No shared seasonalities included. If desired, specifications must be added to the model_config.")
+                self.warning.info("No shared seasonalities included. If desired, specifications must be added to the model_config.")
                 shared_seasonality = 0
             
             target_mean = (
@@ -149,9 +145,7 @@ class SorcererModel:
         training_data: pd.DataFrame,
         **kwargs: Any,
     ) -> az.InferenceData:
-        """
-        Fits the model to the data using the specified sampler configuration.
-        """
+
         (
             X,
             self.x_training_min,
@@ -163,9 +157,16 @@ class SorcererModel:
         self.build_model(X = X,y = y)
         sampler_config = self.sampler_config.copy()
         sampler_config.update(**kwargs)
+        if sampler_config['verbose']:
+            self.logger.setLevel(logging.CRITICAL)
+            sampler_config['progressbar'] = False
+        else:
+            self.logger.setLevel(logging.INFO)
+            sampler_config['progressbar'] = True
+        
         with self.model:
             if self.sampler_config['sampler'] == "MAP":
-                self.map_estimate = [pm.find_MAP()]
+                self.map_estimate = [pm.find_MAP(progressbar = sampler_config['progressbar'])]
             else:
                 if self.sampler_config['sampler'] == "NUTS":
                     sampler=pm.NUTS()
@@ -173,24 +174,19 @@ class SorcererModel:
                     sampler=pm.HamiltonianMC()
                 if self.sampler_config['sampler'] == "metropolis":
                     sampler=pm.Metropolis()
-                idata_temp = pm.sample(step = sampler, **{k: v for k, v in sampler_config.items() if k != 'sampler'})
+                idata_temp = pm.sample(step = sampler, **{k: v for k, v in sampler_config.items() if (k != 'sampler' and k != 'verbose')})
                 self.idata = self.set_idata_attrs(idata_temp)
 
     def set_idata_attrs(self, idata=None):
-        """
-        Sets attributes to the inference data object for identification and metadata.
-        """
         if idata is None:
             idata = self.idata
         if idata is None:
             raise RuntimeError("No idata provided to set attrs on.")
-        
         idata.attrs["id"] = self.id
         idata.attrs["model_name"] = self.model_name
         idata.attrs["version"] = self.version
         idata.attrs["sampler_config"] = serialize_model_config(self.sampler_config)
         idata.attrs["model_config"] = serialize_model_config(self._serializable_model_config)
-
         return idata
 
     def sample_posterior_predictive(
@@ -198,20 +194,22 @@ class SorcererModel:
         test_data,
         **kwargs
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Samples from the posterior predictive distribution using the fitted model.
-        """
         with self.model:
             x_test = (test_data['date'].astype('int64')//10**9 - self.x_training_min)/(self.x_training_max - self.x_training_min)
             pm.set_data({'input': x_test})
             if self.sampler_config['sampler'] == "MAP":
-                self.posterior_predictive = pm.sample_posterior_predictive(self.map_estimate, predictions=True, **kwargs)
+                if self.sampler_config['verbose']:
+                    self.posterior_predictive = pm.sample_posterior_predictive(self.map_estimate, predictions=True, progressbar = False, **kwargs)
+                else:
+                    self.posterior_predictive = pm.sample_posterior_predictive(self.map_estimate, predictions=True, progressbar = True, **kwargs)
             else:
-                self.posterior_predictive = pm.sample_posterior_predictive(self.idata, predictions=True, **kwargs)
+                if self.sampler_config['verbose']:
+                    self.posterior_predictive = pm.sample_posterior_predictive(self.idata, predictions=True, progressbar = False, **kwargs)
+                else:
+                    self.posterior_predictive = pm.sample_posterior_predictive(self.idata, predictions=True, progressbar = True, **kwargs)
         
         preds_out_of_sample = self.posterior_predictive.predictions_constant_data.sortby('input')['input']
         model_preds = self.posterior_predictive.predictions.sortby(preds_out_of_sample)
-
         return preds_out_of_sample, model_preds
     
     def normalize_data(self,
@@ -222,7 +220,6 @@ class SorcererModel:
             time_series_columns = [x for x in training_data.columns if 'date' not in x]
             X_train = (training_data['date'].astype('int64')//10**9 - self.x_training_min)/(self.x_training_max - self.x_training_min)
             y_train = (training_data[time_series_columns]-self.y_training_min)/(self.y_training_max-self.y_training_min)
-            
             X_test = (test_data['date'].astype('int64')//10**9 - self.x_training_min)/(self.x_training_max - self.x_training_min)
             y_test = (test_data[time_series_columns]-self.y_training_min)/(self.y_training_max-self.y_training_min)
             return (
@@ -236,16 +233,10 @@ class SorcererModel:
             return None
     
     def get_posterior_predictive(self) -> az.InferenceData:
-        """
-        Returns the posterior predictive distribution.
-        """
         return self.posterior_predictive
 
     @property
     def id(self) -> str:
-        """
-        Returns a unique ID for the model instance based on its configuration.
-        """
         return generate_hash_id(self.model_config, self.version, self.model_name)
 
     @property
@@ -263,37 +254,6 @@ class SorcererModel:
         return self.idata
     
     def save(self, fname: str) -> None:
-        """
-        Save the model's inference data to a file.
-
-        Parameters
-        ----------
-        fname : str
-            The name and path of the file to save the inference data with model parameters.
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        RuntimeError
-            If the model hasn't been fit yet (no inference data available).
-
-        Examples
-        --------
-        This method is meant to be overridden and implemented by subclasses.
-        It should not be called directly on the base abstract class or its instances.
-
-        >>> class MyModel(ModelBuilder):
-        >>>     def __init__(self):
-        >>>         super().__init__()
-        >>> model = MyModel()
-        >>> model.fit(data)
-        >>> model.save('model_results.nc')  # This will call the overridden method in MyModel
-        """
-        
-     
         if self.idata is not None and "posterior" in self.idata:
             if self.sampler_config['sampler'] == "MAP":
                 raise RuntimeError("The MAP method cannot be saved.")
@@ -306,10 +266,8 @@ class SorcererModel:
     def load(self, fname: str):
         filepath = Path(str(fname))
         self.idata = az.from_netcdf(filepath)
-        # needs to be converted, because json.loads was changing tuple to list
         self.model_config = json.loads(self.idata.attrs["model_config"])
         self.sampler_config = json.loads(self.idata.attrs["sampler_config"])
-        
         self.build_model(
             X = self.idata.constant_data.input,
             y = self.idata.constant_data.target

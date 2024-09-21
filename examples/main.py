@@ -22,19 +22,19 @@ df_time_series = df[time_series_columns]
 # %%
 model_name = "SorcererModel"
 version = "v0.3"
-forecast_horizon = 50
+forecast_horizon = 30
 
 training_data = df_time_series.iloc[:-forecast_horizon]
 test_data = df_time_series.iloc[-forecast_horizon:]
 
 # Sorcerer
 sampler_config = {
-    "draws": 500,
-    "tune": 100,
+    "draws": 2000,
+    "tune": 500,
     "chains": 1,
     "cores": 1,
     "sampler": "NUTS",
-    "progressbar": False
+    "verbose": False
 }
 
 number_of_weeks_in_a_year = 52.1429
@@ -47,7 +47,7 @@ model_config = {
     "k_sigma_prior": 0.2,
     "fourier_mu_prior": 0,
     "fourier_sigma_prior" : 1,
-    "precision_target_distribution_prior_alpha": 2,
+    "precision_target_distribution_prior_alpha": 100,
     "precision_target_distribution_prior_beta": 0.1,
     "prior_probability_shared_seasonality_alpha": 1,
     "prior_probability_shared_seasonality_beta": 1,
@@ -76,6 +76,8 @@ sorcerer = SorcererModel(
 # %% Fit model
 
 sorcerer.fit(training_data = training_data)
+
+# %%
 """
 if sampler_config["sampler"] != "MAP":
     fname = "examples/models/sorcer_model_v02.nc"
@@ -89,7 +91,7 @@ fname = "examples/models/sorcer_model_v01.nc"
 sorcerer.load(fname)
 """
 
-(preds_out_of_sample, model_preds) = sorcerer.sample_posterior_predictive(test_data = df_time_series)
+(preds_out_of_sample, model_preds) = sorcerer.sample_posterior_predictive(test_data = test_data)
 
 #%% Plot forecast along with test data
 (X_train, y_train, X_test, y_test) = sorcerer.normalize_data(
@@ -133,7 +135,7 @@ for i in range(len(time_series_columns)-1):
 for j in range(i + 1, len(axs)):
     fig.delaxes(axs[j])  # Remove unused axes to clean up the figure
 
-#plt.savefig('./examples/figures/forecast.png')
+plt.savefig('./examples/figures/forecast.png')
 
 
 # %%
