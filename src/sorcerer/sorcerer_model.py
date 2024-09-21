@@ -157,7 +157,7 @@ class SorcererModel:
         self.build_model(X = X,y = y)
         sampler_config = self.sampler_config.copy()
         sampler_config.update(**kwargs)
-        if sampler_config['verbose']:
+        if not sampler_config['verbose']:
             self.logger.setLevel(logging.CRITICAL)
             sampler_config['progressbar'] = False
         else:
@@ -198,12 +198,12 @@ class SorcererModel:
             x_test = (test_data['date'].astype('int64')//10**9 - self.x_training_min)/(self.x_training_max - self.x_training_min)
             pm.set_data({'input': x_test})
             if self.sampler_config['sampler'] == "MAP":
-                if self.sampler_config['verbose']:
+                if not self.sampler_config['verbose']:
                     self.posterior_predictive = pm.sample_posterior_predictive(self.map_estimate, predictions=True, progressbar = False, **kwargs)
                 else:
                     self.posterior_predictive = pm.sample_posterior_predictive(self.map_estimate, predictions=True, progressbar = True, **kwargs)
             else:
-                if self.sampler_config['verbose']:
+                if not self.sampler_config['verbose']:
                     self.posterior_predictive = pm.sample_posterior_predictive(self.idata, predictions=True, progressbar = False, **kwargs)
                 else:
                     self.posterior_predictive = pm.sample_posterior_predictive(self.idata, predictions=True, progressbar = True, **kwargs)
