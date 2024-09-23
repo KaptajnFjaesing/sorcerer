@@ -60,14 +60,16 @@ model_config = {
 sorcerer = SorcererModel(
     model_config = model_config,
     model_name = model_name,
-    sampler_config = sampler_config,
     version = version
     )
 
 
 # %% Fit model
 
-sorcerer.fit(training_data = training_data)
+sorcerer.fit(
+    training_data = training_data,
+    sampler_config = sampler_config
+    )
 
 # %%
 """

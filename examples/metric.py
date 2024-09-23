@@ -101,11 +101,11 @@ for forecast_horizon in range(min_forecast_horizon,max_forecast_horizon+1):
     sorcerer = SorcererModel(
         model_config = model_config,
         model_name = model_name,
-        sampler_config = sampler_config,
         version = version
         )
     sorcerer.fit(
-        training_data = training_data
+        training_data = training_data,
+        sampler_config = sampler_config
         )
     (preds_out_of_sample, model_preds) = sorcerer.sample_posterior_predictive(
         test_data = test_data,
