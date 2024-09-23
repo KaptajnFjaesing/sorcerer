@@ -38,11 +38,10 @@ class SorcererModel:
     def __init__(
         self,
         model_config: dict | None = None,
-        sampler_config: dict | None = None,
         model_name: str = "SorcererModel",
         version: str = None,
     ):
-        self.sampler_config = (get_default_sampler_config() if sampler_config is None else sampler_config)
+        self.sampler_config = None
         self.model_config = (get_default_model_config() if model_config is None else model_config)
         self.model = None
         self.idata: az.InferenceData | None = None
@@ -137,15 +136,14 @@ class SorcererModel:
             beta = self.model_config["precision_target_distribution_prior_beta"],
             dims = 'number_of_time_series'
             )
-
             pm.Normal('target_distribution', mu=target_mean, sigma=1/precision_target, observed=y, dims=['number_of_input_observations', 'number_of_time_series'])
 
     def fit(
         self,
         training_data: pd.DataFrame,
-        **kwargs: Any,
+        sampler_config: dict | None = None
     ) -> az.InferenceData:
-
+        
         (
             X,
             self.x_training_min,
@@ -155,18 +153,17 @@ class SorcererModel:
             self.y_training_max
             )  = normalize_training_data(training_data = training_data)
         self.build_model(X = X,y = y)
-        sampler_config = self.sampler_config.copy()
-        sampler_config.update(**kwargs)
+        self.sampler_config = (get_default_sampler_config() if sampler_config is None else sampler_config)
         if not sampler_config['verbose']:
             self.logger.setLevel(logging.CRITICAL)
-            sampler_config['progressbar'] = False
+            self.sampler_config['progressbar'] = False
         else:
             self.logger.setLevel(logging.INFO)
-            sampler_config['progressbar'] = True
+            self.sampler_config['progressbar'] = True
         
         with self.model:
             if self.sampler_config['sampler'] == "MAP":
-                self.map_estimate = [pm.find_MAP(progressbar = sampler_config['progressbar'])]
+                self.map_estimate = [pm.find_MAP(progressbar = self.sampler_config['progressbar'])]
             else:
                 if self.sampler_config['sampler'] == "NUTS":
                     sampler=pm.NUTS()
@@ -174,7 +171,7 @@ class SorcererModel:
                     sampler=pm.HamiltonianMC()
                 if self.sampler_config['sampler'] == "metropolis":
                     sampler=pm.Metropolis()
-                idata_temp = pm.sample(step = sampler, **{k: v for k, v in sampler_config.items() if (k != 'sampler' and k != 'verbose')})
+                idata_temp = pm.sample(step = sampler, **{k: v for k, v in self.sampler_config.items() if (k != 'sampler' and k != 'verbose')})
                 self.idata = self.set_idata_attrs(idata_temp)
 
     def set_idata_attrs(self, idata=None):
