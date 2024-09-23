@@ -28,8 +28,7 @@ from sorcerer.model_components import (
 )
 from sorcerer.utils import (
     generate_hash_id,
-    normalize_training_data,
-    get_version_from_pyproject
+    normalize_training_data
     )
 
 class SorcererModel:
@@ -37,7 +36,8 @@ class SorcererModel:
     def __init__(
         self,
         model_config: dict | None = None,
-        model_name: str = "SorcererModel"
+        model_name: str = "SorcererModel",
+        model_version: str = None
     ):
         self.sampler_config = None
         self.model_config = (get_default_model_config() if model_config is None else model_config)
@@ -45,7 +45,7 @@ class SorcererModel:
         self.idata: az.InferenceData | None = None
         self.posterior_predictive: az.InferenceData
         self.model_name = model_name
-        self.version = get_version_from_pyproject()
+        self.model_version = model_version
         self.map_estimate = None
         self.x_training_min = None
         self.x_training_max = None
@@ -179,7 +179,7 @@ class SorcererModel:
             raise RuntimeError("No idata provided to set attrs on.")
         idata.attrs["id"] = self.id
         idata.attrs["model_name"] = self.model_name
-        idata.attrs["model_version"] = self.version
+        idata.attrs["model_version"] = self.model_version
         idata.attrs["sampler_config"] = serialize_model_config(self.sampler_config)
         idata.attrs["model_config"] = serialize_model_config(self._serializable_model_config)
         return idata
@@ -232,7 +232,7 @@ class SorcererModel:
 
     @property
     def id(self) -> str:
-        return generate_hash_id(self.model_config, self.version, self.model_name)
+        return generate_hash_id(self.model_config, self.model_version, self.model_name)
 
     @property
     def output_var(self):
