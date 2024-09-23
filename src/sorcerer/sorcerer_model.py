@@ -151,7 +151,7 @@ class SorcererModel:
             self.y_training_max
             )  = normalize_training_data(training_data = training_data)
         self.build_model(X = X,y = y)
-        self.sampler_config = (get_default_sampler_config() if sampler_config is None else self.sampler_config)
+        self.sampler_config = (get_default_sampler_config() if sampler_config is None else sampler_config)
         if not self.sampler_config['verbose']:
             self.logger.setLevel(logging.CRITICAL)
             self.sampler_config['progressbar'] = False
