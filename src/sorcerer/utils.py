@@ -14,7 +14,6 @@ from typing import (
     Dict, 
     Union
     )
-import tomllib
 
 
 def normalize_training_data(training_data: pd.DataFrame) -> tuple:
@@ -115,8 +114,3 @@ def compute_residuals(model_forecasts, test_data, min_forecast_horizon):
     stacked = pd.concat(metrics_list, axis=0)
     
     return stacked
-
-def get_version_from_pyproject():
-    with open("../pyproject.toml", 'rb') as f:
-        pyproject_data = tomllib.load(f)
-        return pyproject_data['tool']['poetry']['version']
