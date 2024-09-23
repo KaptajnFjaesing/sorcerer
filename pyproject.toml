@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sorcerer"
-version = "0.3.0"
+version = "0.3.1"
 description = "A Bayesian hierarchical model for time series forecasting"
 authors = ["Jonas Petersen"]
 readme = ["README.md"]

@@ -28,17 +28,16 @@ from sorcerer.model_components import (
 )
 from sorcerer.utils import (
     generate_hash_id,
-    normalize_training_data
+    normalize_training_data,
+    get_version_from_pyproject
     )
-
 
 class SorcererModel:
 
     def __init__(
         self,
         model_config: dict | None = None,
-        model_name: str = "SorcererModel",
-        version: str = None,
+        model_name: str = "SorcererModel"
     ):
         self.sampler_config = None
         self.model_config = (get_default_model_config() if model_config is None else model_config)
@@ -46,7 +45,7 @@ class SorcererModel:
         self.idata: az.InferenceData | None = None
         self.posterior_predictive: az.InferenceData
         self.model_name = model_name
-        self.version = version
+        self.version = get_version_from_pyproject()
         self.map_estimate = None
         self.x_training_min = None
         self.x_training_max = None
