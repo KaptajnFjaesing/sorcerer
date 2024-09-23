@@ -179,7 +179,7 @@ class SorcererModel:
             raise RuntimeError("No idata provided to set attrs on.")
         idata.attrs["id"] = self.id
         idata.attrs["model_name"] = self.model_name
-        idata.attrs["version"] = self.version
+        idata.attrs["model_version"] = self.version
         idata.attrs["sampler_config"] = serialize_model_config(self.sampler_config)
         idata.attrs["model_config"] = serialize_model_config(self._serializable_model_config)
         return idata
