@@ -10,60 +10,52 @@ import matplotlib.pyplot as plt
 import arviz as az
 
 from src.sorcerer.sorcerer_model import SorcererModel
-from examples.load_data import normalized_weekly_store_category_household_sales
+from examples.load_data import load_m5_weekly_store_category_sales_data
 
-df = normalized_weekly_store_category_household_sales()
-
-time_series_columns = [x for x in df.columns if ('HOUSEHOLD' in x and 'normalized' not in x) or ('date' in x)]
-
-df_time_series = df[time_series_columns]
+_,df,_ = load_m5_weekly_store_category_sales_data()
 
 
-# %%
+#%%
 model_name = "SorcererModel"
 version = "v0.3"
 forecast_horizon = 30
 
-training_data = df_time_series.iloc[:-forecast_horizon]
-test_data = df_time_series.iloc[-forecast_horizon:]
+training_data = df.iloc[:-forecast_horizon]
+test_data = df.iloc[-forecast_horizon:]
 
 # Sorcerer
 sampler_config = {
-    "draws": 2000,
-    "tune": 500,
+    "draws": 500,
+    "tune": 100,
     "chains": 1,
     "cores": 1,
     "sampler": "NUTS",
-    "verbose": False
+    "verbose": True
 }
 
 number_of_weeks_in_a_year = 52.1429
 
 model_config = {
-    "number_of_individual_trend_changepoints": 10,
+    "number_of_individual_trend_changepoints": 20,
     "delta_mu_prior": 0,
     "delta_b_prior": 0.1,
     "m_sigma_prior": 0.2,
     "k_sigma_prior": 0.2,
     "fourier_mu_prior": 0,
     "fourier_sigma_prior" : 1,
-    "precision_target_distribution_prior_alpha": 100,
-    "precision_target_distribution_prior_beta": 0.1,
+    "precision_target_distribution_prior_alpha": 2,
+    "precision_target_distribution_prior_beta": 3,
     "prior_probability_shared_seasonality_alpha": 1,
     "prior_probability_shared_seasonality_beta": 1,
     "individual_fourier_terms": [
-        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 10}
+        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 20}
     ],
     "shared_fourier_terms": [
-        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 5},
-        {'seasonality_period_baseline': number_of_weeks_in_a_year/4,'number_of_fourier_components': 3},
-        {'seasonality_period_baseline': number_of_weeks_in_a_year/12,'number_of_fourier_components': 3},
+        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 10},
+        {'seasonality_period_baseline': number_of_weeks_in_a_year/4,'number_of_fourier_components': 1},
+        {'seasonality_period_baseline': number_of_weeks_in_a_year/12,'number_of_fourier_components': 1},
     ]
 }
-
-if sampler_config['sampler'] == "MAP":
-    model_config['precision_target_distribution_prior_alpha'] = 1000
-    model_config['precision_target_distribution_prior_beta'] = 0.1
 
 sorcerer = SorcererModel(
     model_config = model_config,

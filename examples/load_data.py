@@ -38,7 +38,7 @@ def load_m5_weekly_store_category_sales_data():
                                    validate="1:1").set_index('date')
     # Ensure that the index of your DataFrame is in datetime format
     store_category_sales.index = pd.to_datetime(store_category_sales.index)
-    weekly_store_category_sales = store_category_sales[store_category_sales.index > threshold_date].resample('W-MON', closed = "left", label = "left").sum()
+    weekly_store_category_sales = store_category_sales[store_category_sales.index > threshold_date].resample('W-MON', closed = "left", label = "left").sum().iloc[1:]
     
     food_columns = [x for x in weekly_store_category_sales.columns if 'FOOD' in x]
     household_columns = [x for x in weekly_store_category_sales.columns if 'HOUSEHOLD' in x]
@@ -49,27 +49,10 @@ def load_m5_weekly_store_category_sales_data():
     weekly_store_category_hobbies_sales = weekly_store_category_sales[hobbies_columns]
     
     return (
-        weekly_store_category_food_sales,
-        weekly_store_category_household_sales,
-        weekly_store_category_hobbies_sales
+        weekly_store_category_food_sales.reset_index(),
+        weekly_store_category_household_sales.reset_index(),
+        weekly_store_category_hobbies_sales.reset_index()
         )
-
-
-def normalized_weekly_store_category_household_sales() -> pd.DataFrame:
-    
-    _,weekly_store_category_household_sales,_ = load_m5_weekly_store_category_sales_data()
-    
-    df_temp = weekly_store_category_household_sales.copy().reset_index().iloc[1:]
-    df_temp['week'] = df_temp['date'].dt.strftime('%U').astype(int)
-    df_temp['year'] = df_temp['date'].dt.strftime('%Y').astype(int)
-
-    cols1 = [x for x in df_temp.columns if ('HOUSEHOLD' in x or 'year' in x) ]
-    yearly_means = df_temp[cols1].groupby('year').mean()
-    df_temp_merged = df_temp.merge(yearly_means,  on='year', how = 'left', suffixes=('', '_yearly_mean'))
-    for item in [x for x in df_temp.columns if 'HOUSEHOLD' in x ]:
-        df_temp_merged[item + '_normalized'] = df_temp_merged[item] / df_temp_merged[item + '_yearly_mean']
-
-    return df_temp_merged[[x for x in df_temp_merged.columns if (('HOUSEHOLD' in x or 'week' in x or 'year' in x or 'date' in x) and ('yearly' not in x))]]
 
 
 
