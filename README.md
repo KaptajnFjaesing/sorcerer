@@ -15,12 +15,14 @@ By combining these innovations, **Sorcerer** aims to offer a more comprehensive 
 
 ## Load data
 ```python
+import numpy as np
+import arviz as az
 import matplotlib.pyplot as plt
 from sorcerer.sorcerer_model import SorcererModel
 
-from src.load_data import normalized_weekly_store_category_household_sales
+from examples.load_data import load_m5_weekly_store_category_sales_data
 
-df = normalized_weekly_store_category_household_sales()
+_,df,_ = load_m5_weekly_store_category_sales_data()
 
 ```
 
