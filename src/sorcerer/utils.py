@@ -15,16 +15,22 @@ from typing import (
     Union
     )
 
-
 def normalize_training_data(training_data: pd.DataFrame) -> tuple:
-    time_series_columns = [x for x in training_data.columns if 'date' not in x]
+    time_series_column_group = [x for x in training_data.columns if 'date' not in x]
     x_training_min = (training_data['date'].astype('int64')//10**9).min()
     x_training_max = (training_data['date'].astype('int64')//10**9).max()
-    y_training_min = training_data[time_series_columns].min()
-    y_training_max = training_data[time_series_columns].max()
+    y_training_min = training_data[time_series_column_group].min()
+    y_training_max = training_data[time_series_column_group].max()
     x_train = (training_data['date'].astype('int64')//10**9 - x_training_min)/(x_training_max - x_training_min)
-    y_train = (training_data[time_series_columns]-y_training_min)/(y_training_max-y_training_min)
-    return x_train, x_training_min, x_training_max, y_train, y_training_min, y_training_max
+    y_train = (training_data[time_series_column_group]-y_training_min)/(y_training_max-y_training_min)    
+    mask = training_data[time_series_column_group]
+    mask = mask.where(mask.isna(), 1)
+    X_matrix = mask.multiply(x_train, axis=0)
+    
+    baseline_slope = (y_train.apply(lambda col: col[col.last_valid_index()])-y_train.apply(lambda col: col[col.first_valid_index()])) / (X_matrix.apply(lambda col: col[col.last_valid_index()])-X_matrix.apply(lambda col: col[col.first_valid_index()]))
+    baseline_bias = y_train.apply(lambda col: col[col.first_valid_index()])
+
+    return x_train, x_training_min, x_training_max, y_train, y_training_min, y_training_max, baseline_slope, baseline_bias
 
 def create_fourier_features(
     x: np.array,
