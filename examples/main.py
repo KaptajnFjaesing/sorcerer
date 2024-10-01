@@ -4,7 +4,7 @@ Created on Mon Sep  9 20:22:19 2024
 
 @author: Jonas Petersen
 """
-import umpy as np
+import numpy as np
 import arviz as az
 import matplotlib.pyplot as plt
 from sorcerer.sorcerer_model import SorcererModel
@@ -12,10 +12,15 @@ from examples.load_data import load_m5_weekly_store_category_sales_data
 
 _,df,_ = load_m5_weekly_store_category_sales_data()
 
+nan_count = [0, 102, 73, 17, 180, 42, 9, 4, 0, 8]
+time_series_column_group = [x for x in df.columns if 'HOUSEHOLD' in x]
 
+# Assign NaNs to the start of each column dynamically
+for col, n in zip(time_series_column_group, nan_count):
+    df.loc[:n-1, col] = np.nan
 #%%
 model_name = "SorcererModel"
-model_version = "v0.3.1"
+model_version = "v0.4.0"
 forecast_horizon = 30
 
 training_data = df.iloc[:-forecast_horizon]
@@ -23,8 +28,8 @@ test_data = df.iloc[-forecast_horizon:]
 
 # Sorcerer
 sampler_config = {
-    "draws": 1000,
-    "tune": 200,
+    "draws": 2000,
+    "tune": 500,
     "chains": 1,
     "cores": 1,
     "sampler": "NUTS",
@@ -83,7 +88,11 @@ fname = "examples/models/sorcer_model_v01.nc"
 sorcerer.load(fname)
 """
 
-(preds_out_of_sample, model_preds) = sorcerer.sample_posterior_predictive(test_data = test_data)
+
+
+#%%
+
+model_preds = sorcerer.sample_posterior_predictive(test_data = test_data)
 
 #%% Plot forecast along with test data
 (X_train, y_train, X_test, y_test) = sorcerer.normalize_data(
@@ -92,19 +101,19 @@ sorcerer.load(fname)
         )
 column_names = [x for x in df.columns if 'HOUSEHOLD' in x]
 
-hdi_values = az.hdi(model_preds)["target_distribution"].transpose("hdi", ...)
+hdi_values = az.hdi(model_preds)["predictions"].transpose("hdi", ...)
 
 n_cols = 2
-n_rows = int(np.ceil(len(column_names) / n_cols))  # Number of rows needed
+n_rows = int(np.ceil(len(column_names) / n_cols))
 fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(15, 5 * n_rows), constrained_layout=True)
 axs = axs.flatten()
 for i in range(len(column_names)):
     ax = axs[i]
     ax.plot(X_train, y_train[y_train.columns[i]], color = 'tab:red',  label='Training Data')
     ax.plot(X_test, y_test[y_test.columns[i]], color = 'black',  label='Test Data')
-    ax.plot(preds_out_of_sample, (model_preds["target_distribution"].mean(("chain", "draw")).T)[i], color = 'tab:blue', label='Model')
+    ax.plot(X_test, (model_preds["predictions"].mean(("chain", "draw")).T)[i], color = 'tab:blue', label='Model')
     ax.fill_between(
-        preds_out_of_sample.values,
+        X_test,
         hdi_values[0].values[:,i],
         hdi_values[1].values[:,i],
         color= 'blue',
@@ -115,5 +124,6 @@ for i in range(len(column_names)):
     ax.set_ylabel('Values')
     ax.grid(True)
     ax.legend()
+    ax.set_xlim([-0.05,max(X_test)+0.1])
 
 plt.savefig('./examples/figures/forecast.png')
