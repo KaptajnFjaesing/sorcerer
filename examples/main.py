@@ -140,14 +140,13 @@ plt.savefig('./examples/figures/model_components.png')
 #%% Plot weight contributions
 
 idata = sorcerer.get_idata()
-
-single_scale = idata.posterior["single_scale"].mean(('chain','draw')).values
-shared_scale = idata.posterior["shared_scale"].mean(('chain','draw')).values
+individual_weights = idata.posterior["single_scale"].mean(('chain','draw')).values
+shared_weights = idata.posterior["shared_scale"].mean(('chain','draw')).values
 
 plt.figure(figsize = (20,10),constrained_layout=True)
-plt.scatter(single_scale, time_series_column_group, marker = 'o', label = "Individual seasonality weights (period mixture)")
+plt.scatter(individual_weights, time_series_column_group, marker = 'o', label = "Individual seasonality weights (period mixture)")
 
-for i, shared in enumerate(shared_scale):
+for i, shared in enumerate(shared_weights):
     plt.scatter(shared, time_series_column_group, marker = 'o', label = f"Shared seasonality weights (period {round(model_config['shared_fourier_terms'][i]['seasonality_period_baseline'],2)})")
 
 plt.xlabel('Scale')
