@@ -20,7 +20,7 @@ for col, n in zip(time_series_column_group, nan_count):
     df.loc[:n-1, col] = np.nan
 #%%
 model_name = "SorcererModel"
-model_version = "v0.4.0"
+model_version = "v0.5.0"
 forecast_horizon = 30
 
 training_data = df.iloc[:-forecast_horizon]
@@ -28,12 +28,13 @@ test_data = df.iloc[-forecast_horizon:]
 
 # Sorcerer
 sampler_config = {
-    "draws": 2000,
-    "tune": 500,
+    "draws": 200,
+    "tune": 50,
     "chains": 1,
     "cores": 1,
     "sampler": "NUTS",
-    "verbose": True
+    "verbose": True,
+    "return_inferencedata": True
 }
 
 number_of_weeks_in_a_year = 52.1429
@@ -50,6 +51,15 @@ model_config = {
     "precision_target_distribution_prior_beta": 0.1,
     "prior_probability_shared_seasonality_alpha": 1,
     "prior_probability_shared_seasonality_beta": 1,
+    "autoregressive_order": 1,
+    "rho_mu_prior": 1,
+    "rho_sigma_prior": 1,
+    "ar_precision_alpha_prior": 100,
+    "ar_precision_beta_prior": 0.1,
+    "init_mu_prior": 1,
+    "init_sigma_prior": 1,
+    
+        
     "individual_fourier_terms": [
         {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 20}
     ],

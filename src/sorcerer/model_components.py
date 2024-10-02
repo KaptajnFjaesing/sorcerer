@@ -9,7 +9,7 @@ import pymc as pm
 import pytensor as pt
 from sorcerer.utils import create_fourier_features
 
-def generate_mean(
+def trend_and_fourier_terms(
         X: pd.Series,
         baseline_slope: pd.Series,
         baseline_bias: pd.Series,
@@ -28,9 +28,27 @@ def generate_mean(
         
         s = pt.tensor.linspace(0, 1, model_config["number_of_individual_trend_changepoints"] + 2)[1:-1] # max(x) for input is by definition 1
         A = (x[:, None] > s) * 1.
-        k = pm.Normal('trend_k', mu=baseline_slope, sigma=model_config["k_sigma_prior"], shape=number_of_time_series)
-        delta = pm.Laplace('trend_delta', mu=model_config["delta_mu_prior"], b=model_config["delta_b_prior"], shape=(number_of_time_series, model_config["number_of_individual_trend_changepoints"]))
-        m = pm.Normal('trend_m', mu=baseline_bias, sigma=model_config["m_sigma_prior"], shape=number_of_time_series)
+        k = pm.Normal(
+            name = 'trend_k',
+            mu=baseline_slope,
+            sigma=model_config["k_sigma_prior"],
+            shape=number_of_time_series
+            )
+        delta = pm.Laplace(
+            name = 'trend_delta',
+            mu = model_config["delta_mu_prior"],
+            b = model_config["delta_b_prior"],
+            shape = (
+                number_of_time_series,
+                model_config["number_of_individual_trend_changepoints"]
+                )
+            )
+        m = pm.Normal(
+            name = 'trend_m',
+            mu = baseline_bias,
+            sigma = model_config["m_sigma_prior"],
+            shape=number_of_time_series
+            )
         trend_term = (k + pm.math.dot(A, delta.T)) * x[:, None] + m + pm.math.dot(A, (-s * delta).T)
         
         seasonality_individual = pm.math.zeros((number_of_observations, number_of_time_series))
@@ -40,10 +58,10 @@ def generate_mean(
             
             # Define distinct variable names for coefficients
             fourier_coefficients = pm.Normal(
-                f'fourier_coefficients_{round(seasonality_period_baseline, 2)}',
-                mu=model_config["fourier_mu_prior"],
-                sigma=model_config["fourier_sigma_prior"],
-                shape=(2 * number_of_fourier_components, number_of_time_series)
+                name = f'fourier_coefficients_{round(seasonality_period_baseline, 2)}',
+                mu = model_config["fourier_mu_prior"],
+                sigma = model_config["fourier_sigma_prior"],
+                shape = (2 * number_of_fourier_components, number_of_time_series)
             )
             
             # Create Fourier features
@@ -62,10 +80,10 @@ def generate_mean(
                 
                 # Define distinct variable names for coefficients
                 fourier_coefficients = pm.Normal(
-                    f'fourier_coefficients_shared_{round(seasonality_period_baseline, 2)}',
-                    mu=model_config["fourier_mu_prior"],
-                    sigma=model_config["fourier_sigma_prior"],
-                    shape=(2 * number_of_fourier_components, 1)
+                    name = f'fourier_coefficients_shared_{round(seasonality_period_baseline, 2)}',
+                    mu = model_config["fourier_mu_prior"],
+                    sigma = model_config["fourier_sigma_prior"],
+                    shape = (2 * number_of_fourier_components, 1)
                 )
                 
                 # Create Fourier features
@@ -83,15 +101,15 @@ def generate_mean(
             shared_seasonalities = pm.math.concatenate(shared_seasonalities, axis=1)
             
             prior_probability_shared_seasonality = pm.Beta(
-                'prior_probability_shared_seasonality',
-                alpha=model_config["prior_probability_shared_seasonality_alpha"],
-                beta=model_config["prior_probability_shared_seasonality_beta"],
+                name = 'prior_probability_shared_seasonality',
+                alpha = model_config["prior_probability_shared_seasonality_alpha"],
+                beta = model_config["prior_probability_shared_seasonality_beta"],
                 shape = number_of_time_series
                 )
             include_seasonality = pm.Bernoulli(
-                'include_seasonality',
-                p=prior_probability_shared_seasonality,
-                shape=(len(model_config["shared_fourier_terms"]), number_of_time_series)
+                name = 'include_seasonality',
+                p = prior_probability_shared_seasonality,
+                shape = (len(model_config["shared_fourier_terms"]), number_of_time_series)
             )
             shared_seasonality = pm.math.dot(shared_seasonalities, include_seasonality)
         else:

@@ -23,7 +23,7 @@ from sorcerer.config import (
     serialize_model_config,
 )
 
-from sorcerer.model_components import generate_mean
+from sorcerer.model_components import trend_and_fourier_terms
 
 from sorcerer.utils import (
     generate_hash_id,
@@ -58,23 +58,52 @@ class SorcererModel:
         
     def build_model(self, X, Y):        
         with pm.Model() as self.training_model:
-            target_mean = generate_mean(
+            trend_and_fourier_parts = trend_and_fourier_terms(
                     X = X,
                     baseline_slope = self.baseline_slope,
                     baseline_bias = self.baseline_bias,
                     model_config = self.model_config,
                     model = self.training_model
                     )
+            if self.model_config['autoregressive_order'] > 0:
+                number_of_time_series = self.baseline_slope.shape[0]
+                rho = pm.Normal(
+                    name = 'rho',
+                    mu = self.model_config['rho_mu_prior'],
+                    sigma = self.model_config['rho_sigma_prior'],
+                    shape = (number_of_time_series, self.model_config['autoregressive_order'])
+                    )
+                ar_precision_prior = pm.Gamma(
+                    name = 'ar_precision_prior',
+                    alpha = self.model_config['ar_precision_alpha_prior'],
+                    beta = self.model_config['ar_precision_beta_prior']
+                    )  
+                initial_distribution = pm.Normal.dist(
+                    mu = self.model_config['init_mu_prior'],
+                    sigma = self.model_config['init_sigma_prior'],
+                    shape = (number_of_time_series, self.model_config['autoregressive_order'])
+                    )
+                autoregressive_part = pm.AR(
+                    name = 'autoregressive_part',
+                    rho = rho,
+                    sigma = 1/ar_precision_prior,
+                    init_dist = initial_distribution,
+                    constant = False,
+                    dims = ['number_of_time_series', 'number_of_observations']
+                ).T
+            else:
+                autoregressive_part = 0
+   
             precision_target = pm.Gamma(
-            'precision_target_distribution',
-            alpha = self.model_config["precision_target_distribution_prior_alpha"],
-            beta = self.model_config["precision_target_distribution_prior_beta"],
-            dims = 'number_of_time_series'
+                name = 'precision_target',
+                alpha = self.model_config["precision_target_distribution_prior_alpha"],
+                beta = self.model_config["precision_target_distribution_prior_beta"],
+                shape = number_of_time_series
             )
             pm.Normal(
-                'target_distribution',
-                mu = target_mean,
-                sigma=1/precision_target,
+                name = 'target_distribution',
+                mu = trend_and_fourier_parts + autoregressive_part,
+                sigma = 1/precision_target,
                 observed = Y,
                 dims=['number_of_observations', 'number_of_time_series']
                 )
@@ -96,6 +125,11 @@ class SorcererModel:
          )  = normalize_training_data(training_data = training_data)
         self.build_model(X = X, Y = Y)
         self.sampler_config = (get_default_sampler_config() if sampler_config is None else sampler_config)
+        
+        if not self.sampler_config.get("return_inferencedata", False):
+            self.sampler_config['return_inferencedata'] = True
+            self.logger.warning("InferenceWarning: return_inferencedata forced to be true")
+
         if not self.sampler_config['verbose']:
             self.logger.setLevel(logging.CRITICAL)
             self.sampler_config['progressbar'] = False
@@ -113,7 +147,9 @@ class SorcererModel:
                     sampler=pm.HamiltonianMC()
                 if self.sampler_config['sampler'] == "metropolis":
                     sampler=pm.Metropolis()
-                idata_temp = pm.sample(step = sampler, **{k: v for k, v in self.sampler_config.items() if (k != 'sampler' and k != 'verbose')})
+                idata_temp = pm.sample(
+                    step = sampler,
+                    **{k: v for k, v in self.sampler_config.items() if (k != 'sampler' and k != 'verbose')})
                 self.idata = self.set_idata_attrs(idata_temp)
 
     def set_idata_attrs(self, idata=None):
@@ -134,25 +170,57 @@ class SorcererModel:
         **kwargs
     ) -> Tuple[np.ndarray, np.ndarray]:
         X_test = (test_data['date'].astype('int64')//10**9 - self.x_training_min)/(self.x_training_max - self.x_training_min)
+        
+        
         with pm.Model() as self.testing_model:
-            target_mean = generate_mean(
+            
+            trend_and_fourier_parts = trend_and_fourier_terms(
                     X = X_test,
                     baseline_slope = self.baseline_slope,
                     baseline_bias = self.baseline_bias,
                     model_config = self.model_config,
                     model = self.testing_model
                     )
+            if self.model_config['autoregressive_order'] > 0:
+                number_of_time_series = self.baseline_slope.shape[0]
+                self.testing_model.add_coords({"number_of_observations_minus_one": range(- 1, X_test.shape[0], 1)})
+                rho = pm.Normal(
+                    name = 'rho',
+                    mu = self.model_config['rho_mu_prior'],
+                    sigma = self.model_config['rho_sigma_prior'],
+                    shape = (number_of_time_series, self.model_config['autoregressive_order'])
+                    )
+                ar_precision_prior = pm.Gamma(
+                    name = 'ar_precision_prior',
+                    alpha = self.model_config['ar_precision_alpha_prior'],
+                    beta = self.model_config['ar_precision_beta_prior']
+                    )  
+                initial_distribution = pm.DiracDelta.dist(
+                    c = self.idata.posterior['autoregressive_part'].mean(('chain','draw')).values[:,-self.model_config['autoregressive_order']:],
+                    shape = (number_of_time_series, self.model_config['autoregressive_order'])
+                    )
+                autoregressive_part = pm.AR(
+                    name = 'autoregressive_part',
+                    rho = rho,
+                    sigma = 1/ar_precision_prior,
+                    init_dist = initial_distribution,
+                    constant = False,
+                    dims = ['number_of_time_series', 'number_of_observations_minus_one']
+                ).T
+            else:
+                autoregressive_part = 0
+
             precision_target = pm.Gamma(
-            'precision_target_distribution',
-            alpha = self.model_config["precision_target_distribution_prior_alpha"],
-            beta = self.model_config["precision_target_distribution_prior_beta"],
-            dims = 'number_of_time_series'
+                name = 'precision_target',
+                alpha = self.model_config["precision_target_distribution_prior_alpha"],
+                beta = self.model_config["precision_target_distribution_prior_beta"],
+                shape = number_of_time_series
             )
             pm.Normal(
-                'predictions',
-                mu = target_mean,
-                sigma=1/precision_target,
-                dims=['number_of_observations', 'number_of_time_series']
+                name = 'predictions',
+                mu = trend_and_fourier_parts+autoregressive_part[1:,:],
+                sigma = 1/precision_target,
+                dims = ['number_of_observations', 'number_of_time_series']
                 )
             if self.sampler_config['sampler'] == "MAP":
                 if not self.sampler_config['verbose']:
