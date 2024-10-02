@@ -36,7 +36,7 @@ def create_fourier_features(
     x: np.array,
     number_of_fourier_components: int,
     seasonality_period: float
-) -> np.array:
+    ):
     """
     Create Fourier features for modeling seasonality in time series data.
 
@@ -59,7 +59,7 @@ def generate_hash_id(
     model_config: Dict[str, Union[int, float, Dict]],
     version: str,
     model_type: str
-) -> str:
+    ) -> str:
     """
     Generates a unique hash ID for a model based on its configuration, version, and type.
 

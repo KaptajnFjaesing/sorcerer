@@ -47,7 +47,7 @@ for col, n in zip(time_series_column_group, nan_count):
 ## Define model
 ```python
 model_name = "SorcererModel"
-model_version = "v0.4.0"
+model_version = "v0.4.1"
 forecast_horizon = 30
 
 training_data = df.iloc[:-forecast_horizon]
@@ -60,7 +60,8 @@ sampler_config = {
     "chains": 1,
     "cores": 1,
     "sampler": "NUTS",
-    "verbose": True
+    "verbose": True,
+    "nuts_sampler": "numpyro"
 }
 
 number_of_weeks_in_a_year = 52.1429
@@ -73,16 +74,16 @@ model_config = {
     "k_sigma_prior": 0.2,
     "fourier_mu_prior": 0,
     "fourier_sigma_prior" : 1,
-    "precision_target_distribution_prior_alpha": 10,
+    "precision_target_distribution_prior_alpha": 50,
     "precision_target_distribution_prior_beta": 0.1,
     "prior_probability_shared_seasonality_alpha": 1,
     "prior_probability_shared_seasonality_beta": 1,
     "individual_fourier_terms": [
-        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 20}
+        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 10}
     ],
     "shared_fourier_terms": [
-        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 10},
-        {'seasonality_period_baseline': number_of_weeks_in_a_year/4,'number_of_fourier_components': 1},
+        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 8},
+        {'seasonality_period_baseline': number_of_weeks_in_a_year/4,'number_of_fourier_components': 2},
         {'seasonality_period_baseline': number_of_weeks_in_a_year/12,'number_of_fourier_components': 1},
     ]
 }
@@ -106,13 +107,7 @@ sorcerer.fit(
 ```python
 ImputationWarning: Data in target_distribution contains missing values and will be automatically imputed from the sampling distribution.
   warnings.warn(impute_message, ImputationWarning)
-
-Sequential sampling (1 chains in 1 job)
-CompoundStep
->NUTS: [trend_k, trend_delta, trend_m, fourier_coefficients_0.22, fourier_coefficients_shared_0.22, fourier_coefficients_shared_0.05, fourier_coefficients_shared_0.02, prior_probability_shared_seasonality, precision_target_distribution, target_distribution_unobserved]
->BinaryGibbsMetropolis: [include_seasonality]
-Sampling chain 0, 0 divergences ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00 / 0:40:37
-Sampling 1 chain for 500 tune and 2_000 draw iterations (500 + 2_000 draws total) took 2437 seconds.
+sample: 100%|██████████████████████████| 2500/2500 [09:46<00:00,  4.26it/s, 511 steps of size 7.80e-03. acc. prob=0.88]
 Only one chain was sampled, this makes it impossible to run some convergence checks
 ```
 
@@ -162,3 +157,47 @@ for i in range(len(column_names)):
 ```
 
 ![Forecasts](examples/figures/forecast.png)
+
+## Plot model components for training data
+```python
+X_train, trend, seasonality_individual, shared_seasonality = sorcerer.get_mean_model_components()
+
+n_cols = 2
+n_rows = int(np.ceil(len(time_series_column_group) / n_cols))
+fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(27, 5 * n_rows), constrained_layout=True)
+axs = axs.flatten()
+for i in range(len(time_series_column_group)):
+    ax = axs[i]
+    ax.plot(X_train, Y_train[Y_train.columns[i]], color = 'tab:red',  label='Training Data')
+    ax.plot(X_train, trend[:,i], color = 'tab:blue',  label='Trend')
+    ax.plot(X_train, seasonality_individual[:,i], color = 'tab:green',  label='Individual Seasonality')
+    ax.plot(X_train, shared_seasonality[:,i], color = 'tab:orange',  label='Shared Seasonality')
+    ax.plot(X_train, trend[:,i]+seasonality_individual[:,i]+shared_seasonality[:,i], color = 'black',  label='Complete Fit')
+    
+    ax.set_title(time_series_column_group[i])
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Values')
+    ax.grid(True)
+    ax.legend(loc = 'center right')
+    ax.set_xlim([-0.05,max(X_test)+0.1])
+```
+![Forecasts](examples/figures/model_components.png)
+
+## Plot model components for training data
+```python
+idata = sorcerer.get_idata()
+individual_weights = idata.posterior["single_scale"].mean(('chain','draw')).values
+shared_weights = idata.posterior["shared_scale"].mean(('chain','draw')).values
+
+plt.figure(figsize = (20,10),constrained_layout=True)
+plt.scatter(individual_weights, time_series_column_group, marker = 'o', label = "Individual seasonality weights (period mixture)")
+
+for i, shared in enumerate(shared_weights):
+    plt.scatter(shared, time_series_column_group, marker = 'o', label = f"Shared seasonality weights (period {round(model_config['shared_fourier_terms'][i]['seasonality_period_baseline'],2)})")
+
+plt.xlabel('Scale')
+plt.ylabel('Time series')
+plt.grid(visible=True, which='both', linewidth=0.6, color='gray', alpha=0.7)
+plt.legend()
+```
+![Forecasts](examples/figures/weight_contributions.png)
