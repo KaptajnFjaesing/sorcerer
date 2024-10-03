@@ -25,7 +25,7 @@ def trend_and_fourier_terms(
         model.add_coords({"number_of_time_series": range(number_of_time_series)})
         model.add_coords({"number_of_observations": range(number_of_observations)})
         x = pm.Data('input_training', X)
-        
+                
         s = pt.tensor.linspace(0, 1, model_config["number_of_individual_trend_changepoints"] + 2)[1:-1] # max(x) for input is by definition 1
         A = (x[:, None] > s) * 1.
         k = pm.Normal(
@@ -50,9 +50,7 @@ def trend_and_fourier_terms(
             shape = number_of_time_series
             )
         trend_term = (k + pm.math.dot(A, delta.T)) * x[:, None] + m + pm.math.dot(A, (-s * delta).T)
-        
-        
-        
+
         seasonality_individual = pm.math.zeros((number_of_observations, number_of_time_series))
         for term in model_config["individual_fourier_terms"]:
             number_of_fourier_components = term['number_of_fourier_components']
@@ -76,8 +74,8 @@ def trend_and_fourier_terms(
         
         single_scale = pm.Normal(
             name = 'single_scale',
-            mu = 0,
-            sigma = 1,
+            mu = model_config["single_scale_mu_prior"],
+            sigma = model_config["single_scale_sigma_prior"],
             shape = number_of_time_series
             )
         seasonality_individual = seasonality_individual*single_scale
@@ -112,8 +110,8 @@ def trend_and_fourier_terms(
             
             shared_scale = pm.Normal(
                 name = 'shared_scale',
-                mu = 1,
-                sigma = 1,
+                mu = model_config["shared_scale_mu_prior"],
+                sigma = model_config["shared_scale_sigma_prior"],
                 shape = (
                     len(model_config["shared_fourier_terms"]),
                     number_of_time_series

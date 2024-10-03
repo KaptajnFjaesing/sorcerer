@@ -20,7 +20,7 @@ for col, n in zip(time_series_column_group, nan_count):
     df.loc[:n-1, col] = np.nan
 #%%
 model_name = "SorcererModel"
-model_version = "v0.4.1"
+model_version = "v0.4.2"
 forecast_horizon = 30
 
 training_data = df.iloc[:-forecast_horizon]
@@ -40,7 +40,7 @@ sampler_config = {
 number_of_weeks_in_a_year = 52.1429
 
 model_config = {
-    "number_of_individual_trend_changepoints": 40,
+    "number_of_individual_trend_changepoints": int(len(training_data)/number_of_weeks_in_a_year),
     "delta_mu_prior": 0,
     "delta_b_prior": 0.1,
     "m_sigma_prior": 0.2,
@@ -49,14 +49,16 @@ model_config = {
     "fourier_sigma_prior" : 1,
     "precision_target_distribution_prior_alpha": 50,
     "precision_target_distribution_prior_beta": 0.1,
-    "prior_probability_shared_seasonality_alpha": 1,
-    "prior_probability_shared_seasonality_beta": 1,
+    "single_scale_mu_prior": 0,
+    "single_scale_sigma_prior": 1,
+    "shared_scale_mu_prior": 1,
+    "shared_scale_sigma_prior": 1,
     "individual_fourier_terms": [
-        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 10}
+        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 20}
     ],
     "shared_fourier_terms": [
-        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 8},
-        {'seasonality_period_baseline': number_of_weeks_in_a_year/4,'number_of_fourier_components': 2},
+        {'seasonality_period_baseline': number_of_weeks_in_a_year,'number_of_fourier_components': 10},
+        {'seasonality_period_baseline': number_of_weeks_in_a_year/4,'number_of_fourier_components': 5},
         {'seasonality_period_baseline': number_of_weeks_in_a_year/12,'number_of_fourier_components': 1},
     ]
 }
