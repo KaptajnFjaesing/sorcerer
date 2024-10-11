@@ -20,7 +20,7 @@ for col, n in zip(time_series_column_group, nan_count):
     df.loc[:n-1, col] = np.nan
 #%%
 model_name = "SorcererModel"
-model_version = "v0.4.2"
+model_version = "v0.4.3"
 forecast_horizon = 30
 
 training_data = df.iloc[:-forecast_horizon]
@@ -28,8 +28,8 @@ test_data = df.iloc[-forecast_horizon:]
 
 # Sorcerer
 sampler_config = {
-    "draws": 2000,
-    "tune": 500,
+    "draws": 200,
+    "tune": 100,
     "chains": 1,
     "cores": 1,
     "sampler": "NUTS",

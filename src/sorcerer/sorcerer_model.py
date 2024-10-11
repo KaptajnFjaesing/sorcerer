@@ -191,14 +191,7 @@ class SorcererModel:
                         )
 
         return self.posterior_predictive.predictions
-    
-    def unnormalize_predictions(self, Y):
-        if self.y_training_min is not None:    
-            return Y*(self.y_training_max-self.y_training_min)+self.y_training_min
-        else:
-            raise RuntimeError("Data can only be unnormalized after .fit() has been called.")
-            return None
-    
+
     def normalize_data(self,
                        training_data,
                        test_data
