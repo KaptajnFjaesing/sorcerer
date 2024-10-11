@@ -192,6 +192,13 @@ class SorcererModel:
 
         return self.posterior_predictive.predictions
     
+    def unnormalize_predictions(self, Y):
+        if self.y_training_min is not None:    
+            return Y*(self.y_training_max-self.y_training_min)+self.y_training_min
+        else:
+            raise RuntimeError("Data can only be unnormalized after .fit() has been called.")
+            return None
+    
     def normalize_data(self,
                        training_data,
                        test_data
@@ -261,26 +268,30 @@ class SorcererModel:
         
         trend = (mean_k+ np.dot(A, mean_delta.T)) * self.X.values[:, np.newaxis] + mean_m + np.dot(A, (-s * mean_delta).T)
         
-        seasonality_individual = np.zeros((self.X.shape[0], self.Y.shape[1]))
-        for term in self.model_config["individual_fourier_terms"]:
-            dX = self.X.iloc[1]-self.X.iloc[0]
-            frequency_component = 2 * np.pi * (np.arange(term['number_of_fourier_components']) + 1) * self.X.values[:, np.newaxis]
-            t = frequency_component[:, :, None] / (term['seasonality_period_baseline'] * dX)
-            fourier_features = np.concatenate((np.cos(t), np.sin(t)), axis=1)
-            fourier_coefficients = self.idata.posterior[f"fourier_coefficients_{round(term['seasonality_period_baseline'] * dX, 2)}_{term['number_of_fourier_components']}"].mean(('chain','draw')).values
-            seasonality_individual += (fourier_features * fourier_coefficients[None, :, :]).sum(axis = 1)
-        
-        seasonality_individual = seasonality_individual*self.idata.posterior["single_scale"].mean(('chain','draw')).values
-        
+        if len(self.model_config["individual_fourier_terms"]) > 0:
+            seasonality_individual = np.zeros((self.X.shape[0], self.Y.shape[1]))
+            for term in self.model_config["individual_fourier_terms"]:
+                dX = self.X.iloc[1]-self.X.iloc[0]
+                frequency_component = 2 * np.pi * (np.arange(term['number_of_fourier_components']) + 1) * self.X.values[:, np.newaxis]
+                t = frequency_component[:, :, None] / (term['seasonality_period_baseline'] * dX)
+                fourier_features = np.concatenate((np.cos(t), np.sin(t)), axis=1)
+                fourier_coefficients = self.idata.posterior[f"fourier_coefficients_{round(term['seasonality_period_baseline'] * dX, 2)}_{term['number_of_fourier_components']}"].mean(('chain','draw')).values
+                seasonality_individual += (fourier_features * fourier_coefficients[None, :, :]).sum(axis = 1)
+            
+            seasonality_individual = seasonality_individual*self.idata.posterior["single_scale"].mean(('chain','draw')).values
+        else:
+            seasonality_individual = 0
         shared_seasonalities = []
-        for term in self.model_config["shared_fourier_terms"]:
-            dX = self.X.iloc[1]-self.X.iloc[0]
-            frequency_component = 2 * np.pi * (np.arange(term['number_of_fourier_components']) + 1) * self.X.values[:, np.newaxis]
-            t = frequency_component[:, :, None] / (term['seasonality_period_baseline'] * dX)
-            fourier_features = np.concatenate((np.cos(t), np.sin(t)), axis=1)
-            fourier_coefficients = self.idata.posterior[f"fourier_coefficients_shared_{round(term['seasonality_period_baseline'] * dX, 2)}_{term['number_of_fourier_components']}"].mean(('chain','draw')).values
-            shared_seasonalities.append( (fourier_features * fourier_coefficients[None, :, :]).sum(axis = 1))
-        shared_seasonalities = np.concatenate(shared_seasonalities, axis=1)
-        shared_seasonality = np.dot(shared_seasonalities, self.idata.posterior["shared_scale"].mean(('chain','draw')).values)
-        
+        if len(self.model_config["shared_fourier_terms"]) > 0:
+            for term in self.model_config["shared_fourier_terms"]:
+                dX = self.X.iloc[1]-self.X.iloc[0]
+                frequency_component = 2 * np.pi * (np.arange(term['number_of_fourier_components']) + 1) * self.X.values[:, np.newaxis]
+                t = frequency_component[:, :, None] / (term['seasonality_period_baseline'] * dX)
+                fourier_features = np.concatenate((np.cos(t), np.sin(t)), axis=1)
+                fourier_coefficients = self.idata.posterior[f"fourier_coefficients_shared_{round(term['seasonality_period_baseline'] * dX, 2)}_{term['number_of_fourier_components']}"].mean(('chain','draw')).values
+                shared_seasonalities.append( (fourier_features * fourier_coefficients[None, :, :]).sum(axis = 1))
+            shared_seasonalities = np.concatenate(shared_seasonalities, axis=1)
+            shared_seasonality = np.dot(shared_seasonalities, self.idata.posterior["shared_scale"].mean(('chain','draw')).values)
+        else:
+            shared_seasonality = 0
         return self.X, trend, seasonality_individual, shared_seasonality
