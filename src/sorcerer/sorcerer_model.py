@@ -215,6 +215,32 @@ class SorcererModel:
     def get_posterior_predictive(self) -> az.InferenceData:
         return self.posterior_predictive
 
+    def point_estimate(
+            self,
+            test_data,
+            point_estimate = "median",
+            **kwargs
+            ) -> pd.DataFrame:
+
+        model_preds = self.posterior_predictive(
+            test_data,
+            **kwargs
+            )
+        if point_estimate == "mean":
+            model_forecasts = model_preds["predictions"].mean(("chain", "draw")).values
+        elif point_estimate == "median":
+            model_forecasts = model_preds["predictions"].median(("chain", "draw")).values
+        else:
+            raise ValueError("point_estimate must be either 'mean' or 'median'.")
+
+        model_forecasts_with_timesteps = pd.DataFrame(
+            data= model_forecasts * (self.y_training_max - self.y_training_min).to_numpy() + self.y_training_min.to_numpy(),
+            columns = [x for x in test_data.columns if 'date' not in x]
+        )
+        model_forecasts_with_timesteps.insert(0, "date",  test_data["date"].values)
+
+        return model_forecasts_with_timesteps
+
     @property
     def id(self) -> str:
         return generate_hash_id(self.model_config, self.model_version, self.model_name)
