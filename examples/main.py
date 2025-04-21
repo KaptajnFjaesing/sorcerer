@@ -80,6 +80,12 @@ sorcerer.fit(
 
 #%% Model predictions
 
+point_estimates = sorcerer.point_estimate(
+    test_data = test_data,
+    point_estimate="mean"
+    )
+
+#%%
 model_preds = sorcerer.sample_posterior_predictive(test_data = test_data)
 
 #%% Plot forecast along with test data

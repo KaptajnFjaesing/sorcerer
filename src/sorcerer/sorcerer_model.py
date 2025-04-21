@@ -222,7 +222,7 @@ class SorcererModel:
             **kwargs
             ) -> pd.DataFrame:
 
-        model_preds = self.posterior_predictive(
+        model_preds = self.sample_posterior_predictive(
             test_data,
             **kwargs
             )
