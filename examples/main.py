@@ -86,6 +86,31 @@ point_estimates = sorcerer.point_estimate(
     )
 
 #%%
+n_cols = 2
+n_rows = int(np.ceil(len(time_series_column_group) / n_cols))
+fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(15, 5 * n_rows), constrained_layout=True)
+axs = axs.flatten()
+
+for i in range(len(time_series_column_group)):
+    ax = axs[i]
+    # Plot raw training data
+    ax.plot(training_data["date"], training_data[time_series_column_group[i]], color='tab:red', label='Training Data')
+    # Plot raw test data
+    ax.plot(test_data["date"], test_data[time_series_column_group[i]], color='black', label='Test Data')
+    # Plot point estimates
+    ax.plot(test_data["date"], point_estimates[time_series_column_group[i]], color='tab:blue', label='Point Estimates')
+    
+    ax.set_title(time_series_column_group[i])
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Values')
+    ax.grid(True)
+    ax.legend(loc='center left')
+
+# Save the figure
+#plt.savefig('./examples/figures/forecast_point_estimates.png')
+
+
+#%%
 model_preds = sorcerer.sample_posterior_predictive(test_data = test_data)
 
 #%% Plot forecast along with test data
